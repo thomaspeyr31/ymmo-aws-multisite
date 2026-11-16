@@ -1,0 +1,59 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="ymmo-step05-ipsec" name="Step 05 (1/2) — accès nomade IPSec">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Step 05 (1/2) — Accès NOMADE par tunnel IPSec : un poste hors entreprise atteint le siège, chiffré" style="text;html=1;align=center;fontSize=18;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="20" y="10" width="1680" height="34" as="geometry" />
+        </mxCell>
+        <mxCell id="goal" value="Objectif de cette brique : OUVRIR un accès distant. (Le filtrage des flux est l'objet du schéma 2/2.)" style="text;html=1;align=center;fontSize=13;fontStyle=2;fontColor=#6C757D;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="20" y="44" width="1680" height="20" as="geometry" />
+        </mxCell>
+
+        <!-- INTERNET / nomade -->
+        <mxCell id="net" value="INTERNET (réseau public)" style="rounded=1;arcSize=6;fillColor=#F0F2F5;strokeColor=#C8D0D8;fontSize=12;fontStyle=2;fontColor=#6C757D;fontFamily=Helvetica;dashed=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="520" height="560" as="geometry" />
+        </mxCell>
+        <mxCell id="mac" value="Mac NOMADE (télétravail / déplacement)&#10;client IKEv2 NATIF macOS&#10;profil .mobileconfig (CA + VPN)&#10;auth EAP : user « nomade » + mdp" style="rounded=1;arcSize=8;fillColor=#FBFCFE;strokeColor=#B0B8C0;strokeWidth=2;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="110" y="320" width="320" height="140" as="geometry" />
+        </mxCell>
+
+        <!-- VPC siège -->
+        <mxCell id="siege" value="VPC Siège · 10.10.0.0/16" style="rounded=1;arcSize=4;fillColor=#FBFEFF;strokeColor=#29B6D6;strokeWidth=2;verticalAlign=top;align=left;spacingLeft=12;spacingTop=8;fontSize=14;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="700" y="120" width="940" height="560" as="geometry" />
+        </mxCell>
+
+        <!-- passerelle -->
+        <mxCell id="gw" value="EC2 ec2-vpn-gateway-siege (Ubuntu)&#10;strongSwan IKEv2 — subnet PUBLIC&#10;EIP 15.237.77.186&#10;masquerade · DNS poussé = DC" style="rounded=1;arcSize=8;fillColor=#1E8FA8;fontColor=#FFFFFF;strokeColor=#15707F;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="740" y="300" width="300" height="150" as="geometry" />
+        </mxCell>
+
+        <!-- DC + FILESRV -->
+        <mxCell id="dc" value="DC ymmo.lan&#10;10.10.10.10&#10;AD + DNS" style="rounded=1;arcSize=8;fillColor=#3D4893;fontColor=#FFFFFF;strokeColor=#2D3570;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="220" width="180" height="110" as="geometry" />
+        </mxCell>
+        <mxCell id="fs" value="FILESRV&#10;10.10.10.8&#10;partages SMB par pôle" style="rounded=1;arcSize=8;fillColor=#1E8FA8;fontColor=#FFFFFF;strokeColor=#15707F;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1180" y="380" width="180" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- tunnel -->
+        <mxCell id="tun" value="Tunnel IPSec (IKEv2 / ESP) — chiffré sur Internet (UDP 500/4500)" style="endArrow=classic;startArrow=classic;strokeColor=#1B5E20;strokeWidth=3;fontSize=12;fontColor=#1B5E20;fontStyle=1;" edge="1" parent="1" source="mac" target="gw"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_gw_dc" value="LDAP/Kerberos" style="endArrow=classic;strokeColor=#2D3570;strokeWidth=2;fontSize=11;fontColor=#2D3570;" edge="1" parent="1" source="gw" target="dc"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_gw_fs" value="SMB 445" style="endArrow=classic;strokeColor=#15707F;strokeWidth=2;fontSize=11;fontColor=#15707F;" edge="1" parent="1" source="gw" target="fs"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- étapes -->
+        <mxCell id="steps" value="1) Le Mac monte le tunnel IKEv2 (auth EAP) → reçoit une IP virtuelle + le DNS du DC.&#10;2) Masquerade : son trafic ressort avec l'IP de la passerelle → atteint DC + FILESRV.&#10;3) smb://filesrv.ymmo.lan/&lt;Pôle&gt; avec un compte AD → mêmes droits qu'au bureau (NTFS step 04)." style="rounded=1;arcSize=6;fillColor=#EEF0F8;strokeColor=#2D3570;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;fontSize=12;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="740" y="500" width="860" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- CT-05 -->
+        <mxCell id="ct" value="✓ CT-05 : marc.lefevre (Commercial) connecté en nomade → \\FILESRV\Commercial OK, \\FILESRV\AdminRH refusé. L'identité AD prime, pas la localisation." style="rounded=1;arcSize=8;fillColor=#A8E8D8;fontColor=#1B5E20;strokeColor=#80D0C0;align=left;spacingLeft=10;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="700" width="1580" height="44" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

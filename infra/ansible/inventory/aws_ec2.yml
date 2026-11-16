@@ -1,0 +1,17 @@
+---
+# Inventaire DYNAMIQUE : découvre les EC2 Windows du projet (région Paris) et les
+# range par rôle. Aucune IP à maintenir.
+plugin: amazon.aws.aws_ec2
+regions:
+  - eu-west-3
+filters:
+  "tag:Project": ymmo
+  instance-state-name: running
+hostnames:
+  - instance-id
+groups:
+  dc: "'domain-controller' in (tags.Role | default(''))"      # le contrôleur de domaine
+  ad_admin: "'ad-admin' in (tags.Role | default(''))"         # le poste d'administration
+  postes: "'poste-agence' in (tags.Role | default(''))"       # les postes d'agence (jonction domaine)
+  fileserver: "'fileserver' in (tags.Role | default(''))"     # le serveur de fichiers du siège
+  vpn_gateway: "'vpn-gateway' in (tags.Role | default(''))"   # la passerelle IPSec nomade (Linux/strongSwan)

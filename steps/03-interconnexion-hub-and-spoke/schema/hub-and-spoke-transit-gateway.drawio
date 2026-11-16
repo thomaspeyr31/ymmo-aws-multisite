@@ -1,0 +1,92 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="ymmo-hub-spoke" name="Hub-and-spoke — Transit Gateway">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="1380" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <!-- Titre -->
+        <mxCell id="title" value="Hub-and-spoke sur AWS — Transit Gateway (Phase 3 : interconnexion des 3 VPC Ymmo)" style="text;html=1;align=center;fontSize=20;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="40" y="10" width="1620" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="subtitle" value="Le hub = Transit Gateway · Les spokes = VPC · La segmentation agence↔agence vient des TABLES DE ROUTAGE du TGW, pas d'un pare-feu" style="text;html=1;align=center;fontSize=14;fontColor=#6C757D;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="40" y="52" width="1620" height="26" as="geometry" />
+        </mxCell>
+
+        <!-- ===== VPC SIÈGE (HUB) ===== -->
+        <mxCell id="vpc_s" value="VPC Siège (HUB) — Aix-en-Provence · 10.10.0.0/16" style="rounded=1;arcSize=6;fillColor=#FBFEFF;strokeColor=#29B6D6;strokeWidth=2;verticalAlign=top;align=center;spacingTop=10;fontSize=16;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="700" y="120" width="320" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="s_route" value="Route table des subnets&#10;10.21.0.0/16 → tgw&#10;10.22.0.0/16 → tgw&#10;(le hub voit les 2 agences)" style="rounded=0;fillColor=#EEF0F8;fontColor=#212529;strokeColor=#2D3570;dashed=1;fontSize=13;fontFamily=Helvetica;whiteSpace=wrap;html=1;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="725" y="190" width="270" height="110" as="geometry" />
+        </mxCell>
+
+        <!-- ===== TRANSIT GATEWAY ===== -->
+        <mxCell id="tgw" value="AWS Transit Gateway&#10;(routeur cloud régional — le HUB)" style="rounded=1;arcSize=10;fillColor=#29B6D6;fontColor=#FFFFFF;strokeColor=#1E8FA8;fontSize=18;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="710" y="500" width="300" height="120" as="geometry" />
+        </mxCell>
+
+        <!-- ===== VPC AGENCE MARSEILLE ===== -->
+        <mxCell id="vpc_m" value="VPC Agence — Marseille · 10.21.0.0/16" style="rounded=1;arcSize=6;fillColor=#FBFCFE;strokeColor=#B0B8C0;verticalAlign=top;align=center;spacingTop=10;fontSize=16;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="160" y="800" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="m_route" value="Route table des subnets&#10;10.10.0.0/16 → tgw&#10;(siège UNIQUEMENT —&#10;aucune route vers Nîmes)" style="rounded=0;fillColor=#F0FAFD;fontColor=#212529;strokeColor=#5CC0D6;dashed=1;fontSize=13;fontFamily=Helvetica;whiteSpace=wrap;html=1;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="185" y="865" width="270" height="105" as="geometry" />
+        </mxCell>
+
+        <!-- ===== VPC AGENCE NÎMES ===== -->
+        <mxCell id="vpc_n" value="VPC Agence — Nîmes · 10.22.0.0/16" style="rounded=1;arcSize=6;fillColor=#FBFCFE;strokeColor=#B0B8C0;verticalAlign=top;align=center;spacingTop=10;fontSize=16;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1240" y="800" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="n_route" value="Route table des subnets&#10;10.10.0.0/16 → tgw&#10;(siège UNIQUEMENT —&#10;aucune route vers Marseille)" style="rounded=0;fillColor=#F0FAFD;fontColor=#212529;strokeColor=#5CC0D6;dashed=1;fontSize=13;fontFamily=Helvetica;whiteSpace=wrap;html=1;align=left;spacingLeft=8;" vertex="1" parent="1">
+          <mxGeometry x="1265" y="865" width="270" height="105" as="geometry" />
+        </mxCell>
+
+        <!-- ===== ATTACHMENTS (connectivité VPC <-> TGW) ===== -->
+        <mxCell id="att_s" value="Attachment Siège" style="endArrow=none;strokeColor=#1E8FA8;strokeWidth=3;fontSize=13;fontColor=#1E8FA8;fontStyle=1;exitX=0.5;exitY=1;entryX=0.5;entryY=0;" edge="1" parent="1" source="vpc_s" target="tgw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="att_m" value="Attachment Marseille" style="endArrow=none;strokeColor=#1E8FA8;strokeWidth=3;fontSize=13;fontColor=#1E8FA8;fontStyle=1;exitX=0.7;exitY=0;entryX=0.1;entryY=1;" edge="1" parent="1" source="vpc_m" target="tgw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="att_n" value="Attachment Nîmes" style="endArrow=none;strokeColor=#1E8FA8;strokeWidth=3;fontSize=13;fontColor=#1E8FA8;fontStyle=1;exitX=0.3;exitY=0;entryX=0.9;entryY=1;" edge="1" parent="1" source="vpc_n" target="tgw">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+
+        <!-- ===== FLUX AUTORISÉS (badges verts) ===== -->
+        <mxCell id="ok_m" value="✓ Siège ↔ Marseille&#10;autorisé" style="rounded=1;arcSize=20;fillColor=#A8E8D8;fontColor=#1B5E20;strokeColor=#80D0C0;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="430" y="560" width="180" height="50" as="geometry" />
+        </mxCell>
+        <mxCell id="ok_n" value="✓ Siège ↔ Nîmes&#10;autorisé" style="rounded=1;arcSize=20;fillColor=#A8E8D8;fontColor=#1B5E20;strokeColor=#80D0C0;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1110" y="560" width="180" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ===== FLUX INTERDIT agence <-> agence ===== -->
+        <mxCell id="block" value="" style="endArrow=none;startArrow=none;dashed=1;dashPattern=6 6;strokeColor=#E8636A;strokeWidth=3;exitX=1;exitY=0.5;entryX=0;entryY=0.5;" edge="1" parent="1" source="vpc_m" target="vpc_n">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="block_lbl" value="✗ Agence ↔ Agence : AUCUNE route TGW&#10;(segmentation — le trafic ne peut transiter que par le siège)" style="rounded=1;arcSize=12;fillColor=#F0A8AC;fontColor=#7A1F24;strokeColor=#D14F56;fontSize=14;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="640" y="858" width="440" height="74" as="geometry" />
+        </mxCell>
+
+        <!-- ===== PANNEAU : TABLES DE ROUTAGE TGW ===== -->
+        <mxCell id="panel_title" value="Le cœur du pattern : 2 tables de routage du Transit Gateway" style="text;html=1;align=left;fontSize=16;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1050" width="900" height="28" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rt_hub" value="&lt;b&gt;TGW Route Table : rt-hub&lt;/b&gt;&lt;br&gt;&lt;i&gt;Associée à : attachment Siège&lt;/i&gt;&lt;br&gt;──────────────&lt;br&gt;10.10.0.0/16 → Siège (local)&lt;br&gt;10.21.0.0/16 → Agence Marseille&lt;br&gt;10.22.0.0/16 → Agence Nîmes&lt;br&gt;&lt;br&gt;➜ Le HUB voit les 3 sites" style="rounded=1;arcSize=6;fillColor=#EEF0F8;strokeColor=#2D3570;fontColor=#212529;fontSize=14;fontFamily=Helvetica;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="60" y="1090" width="470" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="rt_spokes" value="&lt;b&gt;TGW Route Table : rt-spokes&lt;/b&gt;&lt;br&gt;&lt;i&gt;Associée à : attachments Marseille + Nîmes&lt;/i&gt;&lt;br&gt;──────────────&lt;br&gt;10.10.0.0/16 → Siège&lt;br&gt;&lt;span style=&quot;color:#D14F56&quot;&gt;✗ aucune route 10.2x.0.0/16 vers l'autre agence&lt;/span&gt;&lt;br&gt;&lt;br&gt;➜ Un SPOKE ne voit QUE le siège" style="rounded=1;arcSize=6;fillColor=#FFF0E8;strokeColor=#D89A3C;fontColor=#212529;fontSize=14;fontFamily=Helvetica;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="560" y="1090" width="470" height="240" as="geometry" />
+        </mxCell>
+
+        <mxCell id="concepts" value="&lt;b&gt;3 notions TGW à expliquer au jury&lt;/b&gt;&lt;br&gt;&lt;br&gt;① &lt;b&gt;Attachment&lt;/b&gt; : rattachement d'un VPC au TGW (1 par VPC)&lt;br&gt;② &lt;b&gt;Association&lt;/b&gt; : quelle route-table TGW pilote un attachment&lt;br&gt;③ &lt;b&gt;Propagation&lt;/b&gt; : quels CIDR une route-table apprend&lt;br&gt;&lt;br&gt;La segmentation agence↔agence = choix de routage (#3),&lt;br&gt;pas un pare-feu. Extensible aux 12 agences sans maillage." style="rounded=1;arcSize=6;fillColor=#F7F8FA;strokeColor=#7B68B8;fontColor=#212529;fontSize=14;fontFamily=Helvetica;whiteSpace=wrap;html=1;align=left;verticalAlign=top;spacingLeft=12;spacingTop=10;" vertex="1" parent="1">
+          <mxGeometry x="1060" y="1090" width="580" height="240" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

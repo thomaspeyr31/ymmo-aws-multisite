@@ -1,0 +1,8 @@
+---
+# Collections Ansible nécessaires à la configuration de l'AD et à la connexion SSM.
+# Installer : ansible-galaxy collection install -r requirements.yml
+collections:
+  - name: microsoft.ad        # OU, groupes, utilisateurs AD (idempotent)
+  - name: ansible.windows
+  - name: amazon.aws          # inventaire dynamique aws_ec2
+  - name: community.aws       # connexion aws_ssm (pas de port ouvert)

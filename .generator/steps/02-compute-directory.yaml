@@ -1,0 +1,174 @@
+# =====================================================================
+# Données du step 02 — Compute + Active Directory (auto-géré) — DÉPLOYÉ
+# Source de vérité du contenu. Régénérer via :
+#   .generator/build_step.sh 02-compute-directory
+# =====================================================================
+
+step:
+  id: "02-compute-directory"
+  title: "Step 02 — Compute + Active Directory auto-géré (ymmo.lan)"
+  subtitle: "Ymmo · Phase 2 · serveur Windows + AD installés et configurés sur EC2 (Paris)"
+
+# ---------------------------------------------------------------------
+# DOCUMENT WORD (documentation.docx)
+# ---------------------------------------------------------------------
+sections:
+  - heading: "1. Objectif & périmètre"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Installer et configurer un serveur Windows et y mettre en place Active Directory pour
+          le domaine ymmo.lan, dans le VPC du siège. Cette étape pose le socle d'identité
+          (utilisateurs, groupes, OU) sur lequel s'appuieront les droits et les GPO.
+      - type: bullets
+        items:
+          - "1 contrôleur de domaine (DC) Windows Server 2022 + 1 poste d'administration."
+          - "Forêt ymmo.lan + DNS interne portés par le DC."
+          - "Annuaire calqué sur l'organisation (fonction × site)."
+          - "Tout provisionné par code : Terraform (infra) + Ansible (configuration)."
+
+  - heading: "2. Schéma de l'état déployé"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-ad.png"
+        caption: "Step 02 — infrastructure (DC + poste admin) et annuaire ymmo.lan (modèle à 2 dimensions)."
+        width_in: 6.6
+
+  - heading: "3. Décision structurante : AD AUTO-GÉRÉ sur EC2"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          L'option initiale (AWS Managed Microsoft AD) a été abandonnée : sa création échouait
+          systématiquement côté AWS (« internal service error »). On a basculé sur un AD
+          auto-géré — un serveur Windows promu contrôleur de domaine — qui est aussi plus fidèle
+          au sujet (« installer un serveur Windows + AD »), bien moins cher et sans dépendance au
+          service défaillant.
+      - type: table
+        headers: ["Critère", "Managed AD (abandonné)", "Auto-géré sur EC2 (retenu)"]
+        rows:
+          - ["Qui gère les DC", "AWS (boîte noire)", "Nous (1 EC2 Windows)"]
+          - ["Coût", "~290 €/mois", "~30 €/mois (1 EC2)"]
+          - ["Accès au serveur", "Impossible", "Oui (Fleet Manager / RSAT)"]
+          - ["Fidélité au sujet", "Moyenne", "Forte"]
+
+  - heading: "4. Ressources déployées (Terraform)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Ressource", "Détail"]
+        rows:
+          - ["EC2 ec2-dc-siege", "Windows 2022 FR, t3.medium, IP fixe 10.10.10.10, DC + DNS"]
+          - ["EC2 ec2-admin-siege", "poste d'administration, membre du domaine"]
+          - ["Security group ymmo-dc", "ports AD (53, 88, 389/636, 445, 3268/3269, RPC, NTP) depuis 10.0.0.0/8"]
+          - ["Rôle IAM + instance profile", "AmazonSSMManagedInstanceCore → instances SSM-managed"]
+          - ["DHCP options", "DNS Amazon au bootstrap ; bascule vers le DC après promotion (var point_dhcp_to_dc)"]
+
+  - heading: "5. Annuaire ymmo.lan — modèle à 2 dimensions (Ansible)"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Chaque utilisateur est rangé dans l'OU de son SITE et membre de DEUX groupes : son
+          groupe FONCTION (accès aux dossiers — matrice des droits) et son groupe SITE (GPO,
+          imprimante locale, restrictions). 6 OU · 8 groupes · 10 utilisateurs.
+      - type: table
+        headers: ["Site (OU)", "Utilisateurs", "Pôles représentés"]
+        rows:
+          - ["Siège", "7", "Direction, Comm. & Mktg, Admin/RH, IT"]
+          - ["Marseille", "2", "Commercial, IT (support)"]
+          - ["Nîmes", "1", "Commercial"]
+      - type: bullets
+        items:
+          - "Groupes FONCTION : GRP_Direction, GRP_Commercial, GRP_CommMktg, GRP_AdminRH, GRP_IT."
+          - "Groupes SITE : GRP_Site_Siege, GRP_Site_Marseille, GRP_Site_Nimes."
+
+  - heading: "6. Provisionnement & accès"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Terraform : EC2, security group, IAM/SSM, DHCP (infra/terraform/environments/demo)."
+          - "Ansible (aws_ssm, sans port ouvert) : promote-dc.yml (promotion forêt, async + auto-reboot, forwarder DNS) puis ad-objects.yml (OU/groupes/users, batch idempotent ~26s)."
+          - "Accès aux VM : SSM — Session Manager (terminal), Fleet Manager (RDP navigateur), Ansible. Voir CONNEXION.md à la racine."
+
+  - heading: "7. Pièges rencontrés (et résolus)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Managed AD inutilisable dans ce compte → AD auto-géré sur EC2."
+          - "Ansible aws_ssm instable sur macOS pour les opérations longues → promotion en async (poll:0) ; callback default ; ansible_aws_ssm_timeout élevé."
+          - "Deadlock DNS : repointer le DHCP vers le DC avant sa promotion casse SSM → repoint conditionnel (point_dhcp_to_dc), après promotion uniquement."
+          - "AMI française : le compte admin intégré s'appelle Administrateur (pas Administrator) → format YMMO\\Administrateur."
+          - "Complexité du mot de passe AD : passé à <mot-de-passe-démo> (4 types de caractères)."
+          - "Création des users : batch en 1 appel PowerShell (~26s) au lieu de 10 modules séparés (~5 min)."
+
+  - heading: "8. Validation"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "DC promu : Get-ADDomain → ymmo.lan ; SSM joignable après reboot (forwarder DNS)."
+          - "Annuaire : 6 OU, 8 groupes, 10 utilisateurs (visibles dans dsa.msc sous Ymmo/Sites)."
+          - "ad-objects.yml idempotent (relançable), ~26s."
+          - "À venir (step 03) : jonction des postes d'agence via le Transit Gateway."
+
+  - heading: "9. Voir dans la console AWS (pour la démo)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Quoi montrer", "Où (console, région Paris)"]
+        rows:
+          - ["Les serveurs (DC + admin)", "EC2 → Instances (ec2-dc-siege, ec2-admin-siege)"]
+          - ["Le bureau du DC", "Systems Manager → Fleet Manager → ec2-dc-siege → Remote Desktop → ouvrir dsa.msc"]
+          - ["Utilisateurs / groupes / OU", "(dans dsa.msc) ymmo.lan → OU Ymmo → Sites et Groupes"]
+          - ["Pas de port ouvert", "EC2 → Security Groups (sg-ymmo-dc : ports AD depuis 10.0.0.0/8 seulement)"]
+          - ["Accès sans RDP exposé", "Systems Manager → Session Manager (terminal) / Fleet Manager (bureau)"]
+
+# ---------------------------------------------------------------------
+# PRÉSENTATION POWERPOINT (presentation.pptx)
+# ---------------------------------------------------------------------
+slides:
+  - layout: title
+    title: "Step 02 — Compute + Active Directory (ymmo.lan)"
+    subtitle: "Serveur Windows + AD auto-géré sur EC2 · Paris"
+
+  - layout: image
+    title: "État déployé"
+    image: "schema/etat-deploye-ad.png"
+    width_in: 8.8
+
+  - layout: content
+    title: "Décision : AD auto-géré sur EC2"
+    bullets:
+      - "Managed AD abandonné (échec de création côté AWS)"
+      - "Serveur Windows promu contrôleur de domaine"
+      - "Plus fidèle au sujet, ~10× moins cher, accès au serveur"
+      - "DC + DNS portés par l'EC2 (10.10.10.10)"
+
+  - layout: content
+    title: "Annuaire — modèle à 2 dimensions"
+    bullets:
+      - "FONCTION : 5 groupes (matrice des droits)"
+      - "SITE : 3 groupes + 3 OU (Siège, Marseille, Nîmes)"
+      - "Chaque user = OU de son site + 2 groupes (fonction + site)"
+      - "6 OU · 8 groupes · 10 utilisateurs"
+
+  - layout: content
+    title: "Provisionnement & accès"
+    bullets:
+      - "Terraform : EC2, SG (ports AD), IAM/SSM, DHCP"
+      - "Ansible (aws_ssm, sans port) : promotion + OU/groupes/users"
+      - "Promotion en async (robuste) ; création users en batch (~26s)"
+      - "Accès : SSM Session Manager / Fleet Manager (voir CONNEXION.md)"
+
+  - layout: content
+    title: "Pièges résolus"
+    bullets:
+      - "AMI FR → compte admin Administrateur (YMMO\\Administrateur)"
+      - "Deadlock DNS → repoint DHCP conditionnel après promotion"
+      - "aws_ssm/macOS instable → tâches longues en async"
+      - "Complexité mot de passe → <mot-de-passe-démo>"

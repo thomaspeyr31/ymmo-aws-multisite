@@ -1,0 +1,51 @@
+# =====================================================================
+# Données Active Directory — Ymmo (ymmo.lan)
+# Source de vérité de l'annuaire : OU, groupes, utilisateurs.
+# Consommé par Ansible (step 02), idempotent.
+#
+# Modèle à DEUX dimensions :
+#   - FONCTION (pôle)  -> groupe GRP_<Pole>      : matrice des droits (accès dossiers)
+#   - SITE (localisation) -> OU=<Site> + groupe GRP_Site_<Site> : GPO/imprimante/restrictions locales
+# Chaque utilisateur est rangé dans l'OU de son SITE et membre de 2 groupes (fonction + site).
+# =====================================================================
+
+domain: ymmo.lan
+netbios: YMMO
+base_ou: "OU=Ymmo,DC=ymmo,DC=lan"
+groups_ou: "OU=Groupes,OU=Ymmo,DC=ymmo,DC=lan"
+
+# Mot de passe COMMUN à tous les utilisateurs de démo, lu dans la variable
+# d'environnement AD_DEMO_PASSWORD au lancement : jamais stocké dans le dépôt.
+# ⚠️ DÉMO UNIQUEMENT. Doit respecter la complexité AD par défaut
+# (majuscule + minuscule + chiffre + spécial, 8 caractères minimum).
+default_password: "{{ lookup('env', 'AD_DEMO_PASSWORD') }}"
+
+# --- Dimension FONCTION : groupes calqués sur la matrice des droits (slide 3) ---
+groupes_fonction:
+  - "GRP_Direction"
+  - "GRP_Commercial"
+  - "GRP_CommMktg"
+  - "GRP_AdminRH"
+  - "GRP_IT"
+
+# --- Dimension SITE : 1 OU + 1 groupe par site (siège + 2 agences de démo) ---
+sites:
+  - { cle: "siege",     nom: "Siege",     groupe: "GRP_Site_Siege",     ou: "OU=Siege,OU=Sites,OU=Ymmo,DC=ymmo,DC=lan" }
+  - { cle: "marseille", nom: "Marseille", groupe: "GRP_Site_Marseille", ou: "OU=Marseille,OU=Sites,OU=Ymmo,DC=ymmo,DC=lan" }
+  - { cle: "nimes",     nom: "Nimes",     groupe: "GRP_Site_Nimes",     ou: "OU=Nimes,OU=Sites,OU=Ymmo,DC=ymmo,DC=lan" }
+
+# --- Utilisateurs : un pôle (groupe_fonction) + un site (OU + groupe site) ---
+users:
+  # Siège (Aix) : direction, marketing, RH, IT
+  - { login: "sophie.martin", prenom: "Sophie", nom: "Martin", titre: "Directrice générale",        groupe_fonction: "GRP_Direction",  site: "siege" }
+  - { login: "paul.girard",   prenom: "Paul",   nom: "Girard", titre: "Directeur adjoint",          groupe_fonction: "GRP_Direction",  site: "siege" }
+  - { login: "camille.roux",  prenom: "Camille", nom: "Roux",  titre: "Chargée de communication",   groupe_fonction: "GRP_CommMktg",   site: "siege" }
+  - { login: "thomas.petit",  prenom: "Thomas", nom: "Petit",  titre: "Responsable marketing",      groupe_fonction: "GRP_CommMktg",   site: "siege" }
+  - { login: "nadia.hamon",   prenom: "Nadia",  nom: "Hamon",  titre: "Responsable RH",             groupe_fonction: "GRP_AdminRH",    site: "siege" }
+  - { login: "eric.moreau",   prenom: "Eric",   nom: "Moreau", titre: "Gestionnaire administratif", groupe_fonction: "GRP_AdminRH",    site: "siege" }
+  - { login: "lea.dubois",    prenom: "Lea",    nom: "Dubois", titre: "Administratrice systèmes",   groupe_fonction: "GRP_IT",         site: "siege" }
+  # Agence Marseille : commercial + support local
+  - { login: "julie.bernard", prenom: "Julie",  nom: "Bernard", titre: "Commerciale",               groupe_fonction: "GRP_Commercial", site: "marseille" }
+  - { login: "hugo.faure",    prenom: "Hugo",   nom: "Faure",  titre: "Technicien support",         groupe_fonction: "GRP_IT",         site: "marseille" }
+  # Agence Nîmes : commercial
+  - { login: "marc.lefevre",  prenom: "Marc",   nom: "Lefevre", titre: "Commercial",                groupe_fonction: "GRP_Commercial", site: "nimes" }

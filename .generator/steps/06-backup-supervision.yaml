@@ -1,0 +1,139 @@
+# =====================================================================
+# Données du step 06 — Backup & Supervision — DÉPLOYÉ
+# Régénérer : .generator/build_step.sh 06-backup-supervision
+# =====================================================================
+
+step:
+  id: "06-backup-supervision"
+  title: "Step 06 — Plan de sauvegarde & supervision"
+  subtitle: "Ymmo · AWS Backup (FILESRV + DC) + Amazon CloudWatch"
+
+sections:
+  - heading: "1. Objectif & périmètre"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Le sujet demande un « plan de sauvegarde & supervision ». On sauvegarde la VALEUR (les
+          données et l'annuaire), pas tous les ordinateurs : un poste est jetable (recréé par
+          Terraform), ses données sont centralisées sur le serveur de fichiers.
+      - type: table
+        headers: ["Sauvegardé", "Pas sauvegardé"]
+        rows:
+          - ["FILESRV (données métier) + DC (annuaire AD)", "Postes siège & agences (jetables)"]
+
+  - heading: "2. Architecture de sauvegarde (AWS Backup)"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          On ne script pas de snapshots : on déclare une politique, AWS Backup l'exécute. Quatre briques :
+      - type: table
+        headers: ["Brique", "Rôle"]
+        rows:
+          - ["Selection ymmo-tagged", "QUOI : sélection PAR TAG Backup=true (DC + FILESRV)"]
+          - ["Plan ymmo-plan", "QUAND/COMBIEN : daily-7d (02:00, gardé 7j) + weekly-35d (dim 03:00, gardé 35j)"]
+          - ["Rôle ymmo-backup", "COMMENT : AWS Backup l'assume pour lire les ressources et créer les snapshots"]
+          - ["Vault ymmo-vault", "OÙ : coffre chiffré (KMS) ; recovery points (AMI+EBS) ; expiration auto"]
+      - type: bullets
+        items:
+          - "Sélection par TAG → répétable : après un destroy/apply, les nouvelles instances re-portent Backup=true, la couverture revient seule (aucun ID en dur)."
+          - "Backup EC2 = l'instance entière (AMI + tous les EBS) → capture les données de FILESRV ET la base AD (NTDS.dit) du DC."
+          - "Restauration : depuis le vault, un recovery point → nouvelle EC2/EBS."
+
+  - heading: "3. Pourquoi c'est « cloud-natif » (argument jury)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Serverless / PaaS : le planificateur, la découverte par tag, les jobs et la rétention sont OPÉRÉS PAR AWS. On-prem, c'est un serveur de backup (Veeam…) à installer, patcher, superviser — et sauvegarder lui-même. Ici ce serveur disparaît."
+          - "Déclaratif & versionné : le plan de sauvegarde est de l'Infrastructure as Code (Git, terraform apply) — pas du clic-clic dans une console propriétaire."
+          - "Centralisé multi-services : un seul plan couvre EC2, EBS, RDS (step 7), EFS… au lieu d'un outil par techno."
+          - "Élastique & chiffré : vault S3-backed, chiffrement KMS par défaut, possibilité de Vault Lock (immuabilité anti-ransomware). Pas de baie ni de bandes."
+          - "Rétention automatisée : les lifecycle policies expirent les backups seules → conformité prouvable sans ménage manuel."
+
+  - heading: "4. Supervision (Amazon CloudWatch)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "8 alarmes sur les serveurs (DC, FILESRV, admin, passerelle VPN) : StatusCheckFailed (machine défaillante) et CPUUtilization > 85 %."
+          - "Topic SNS ymmo-alerts → notification email (abonnement optionnel, var alert_email)."
+          - "Dashboard ymmo : CPU + status checks de toutes les machines supervisées, en un coup d'œil."
+          - "Les logs du pare-feu (step 05) alimentent déjà CloudWatch (/ymmo/network-firewall)."
+
+  - heading: "5. Schéma — état déployé"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-backup-supervision.png"
+        caption: "AWS Backup (service managé : selection/plan/rôle/vault) sur DC+FILESRV + supervision CloudWatch (alarmes/SNS/dashboard)."
+        width_in: 6.8
+
+  - heading: "6. Visualiser dans la console AWS (pour la démo)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Quoi montrer", "Où dans la console (région Paris)"]
+        rows:
+          - ["Le coffre + ses sauvegardes", "AWS Backup → Backup vaults → ymmo-vault (recovery points)"]
+          - ["La politique (quand/rétention)", "AWS Backup → Backup plans → ymmo-plan (règles daily-7d / weekly-35d)"]
+          - ["Ce qui est couvert", "AWS Backup → Backup plans → ymmo-plan → Resource assignments → ymmo-tagged (tag Backup=true)"]
+          - ["Les jobs de sauvegarde", "AWS Backup → Jobs → Backup jobs (état des sauvegardes lancées)"]
+          - ["Les alarmes", "CloudWatch → Alarms → All alarms (ymmo-*-status-check / ymmo-*-cpu-high)"]
+          - ["Le tableau de bord", "CloudWatch → Dashboards → ymmo"]
+          - ["Les alertes email", "SNS → Topics → ymmo-alerts (subscriptions)"]
+      - type: paragraph
+        text: >-
+          Preuve « en direct » (si le droit backup:StartBackupJob est accordé) :
+          aws backup start-backup-job … sur FILESRV → un recovery point apparaît dans ymmo-vault.
+          Sinon, le run planifié (02:00 UTC) le produit automatiquement.
+
+  - heading: "7. Reste / évolutions"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Vault Lock (immuabilité anti-ransomware) et sauvegarde applicative-cohérente (VSS Windows) pour le DC : raffinements possibles."
+          - "RDS sera ajouté à la sélection au step 07 (même plan, juste un tag de plus)."
+          - "Mises à jour (SSM Patch Manager) : prévues hors de ce step."
+
+  - heading: "8. Vue d'ensemble — état déployé (synthèse)"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-backup-supervision.png"
+        caption: "Synthèse step 06 : plan de sauvegarde managé + supervision CloudWatch."
+        width_in: 6.8
+
+slides:
+  - layout: title
+    title: "Step 06 — Sauvegarde & supervision"
+    subtitle: "Ymmo · AWS Backup (FILESRV + DC) + CloudWatch"
+
+  - layout: content
+    title: "On sauvegarde la valeur, pas les postes"
+    bullets:
+      - "FILESRV (données) + DC (annuaire) — sélection PAR TAG Backup=true"
+      - "Postes = jetables (recréés par Terraform, données sur FILESRV)"
+      - "Plan : quotidien gardé 7j + hebdo gardé 35j"
+
+  - layout: image
+    title: "État déployé — backup managé + supervision"
+    image: "schema/etat-deploye-backup-supervision.png"
+    width_in: 9.0
+
+  - layout: content
+    title: "AWS Backup = cloud-natif"
+    bullets:
+      - "Serverless : AWS opère le scheduler, la découverte par tag, les jobs, la rétention"
+      - "On-prem, ce serait un serveur Veeam à installer/patcher/sauvegarder — ici il disparaît"
+      - "Déclaratif (IaC), centralisé multi-services, chiffré, rétention auto"
+
+  - layout: content
+    title: "Voir dans la console (démo)"
+    bullets:
+      - "AWS Backup → Vaults / Plans / Jobs"
+      - "CloudWatch → Alarms / Dashboards (ymmo)"
+      - "SNS → ymmo-alerts"
+      - "Preuve directe : start-backup-job → recovery point dans ymmo-vault"

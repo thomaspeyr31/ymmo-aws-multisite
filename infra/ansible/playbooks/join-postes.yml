@@ -1,0 +1,43 @@
+---
+# Joint les POSTES D'AGENCE au domaine ymmo.lan (step 03 — validation jonction).
+# Le poste est une RESSOURCE PARTAGÉE (non nominatif) : l'utilisateur s'identifie au
+# login (cf. docs/notes/note-poste-vs-utilisateur-ad.md). On NE gère PAS les droits ici (step 04).
+#
+# Pré-requis : DC promu (ymmo.lan) et joignable via le Transit Gateway (step 03).
+#
+# Lancement :
+#   ansible-playbook -i inventory/aws_ec2.yml playbooks/join-postes.yml \
+#     -e ad_admin_password="$(terraform -chdir=../terraform/environments/demo output -raw ad_admin_password)"
+- name: Jonction des postes d'agence au domaine ymmo.lan
+  hosts: postes
+  gather_facts: false
+  vars:
+    dc_ip: "10.10.10.10"
+  tasks:
+    # Le poste DOIT résoudre ymmo.lan : on pointe sa carte réseau vers le DC.
+    # Le DC forwarde les requêtes externes (10.10.0.2) → SSM reste résolu/joignable.
+    - name: Pointer le DNS de la carte vers le DC ({{ dc_ip }})
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers:
+          - "{{ dc_ip }}"
+
+    # Jonction SANS reboot tenu par la session SSM (le reboot est fait juste après en async,
+    # sinon la session SSM maintenue pendant le redémarrage casse sur macOS — "worker dead state").
+    # Jonction + reboot en UN SEUL win_shell ASYNC fire-and-forget (async:60, poll:0) :
+    # la session SSM n'est tenue que le temps de LANCER le job (évite le "worker dead state"
+    # macOS observé quand le module tient la session pendant la jonction). Add-Computer -Restart
+    # reboote l'OS lui-même (pas de ec2:RebootInstances requis). On attend ensuite le retour
+    # SSM externe (join-postes.sh), puis on vérifie PartOfDomain.
+    - name: Joindre ymmo.lan et redémarrer (async, fire-and-forget)
+      ansible.windows.win_shell: |
+        $pw   = ConvertTo-SecureString '{{ ad_admin_password }}' -AsPlainText -Force
+        $cred = New-Object System.Management.Automation.PSCredential('{{ ad_admin_user }}', $pw)
+        Add-Computer -DomainName ymmo.lan -Credential $cred -Force -Restart
+      async: 60
+      poll: 0
+      no_log: true
+
+    - name: Bilan jonction
+      ansible.builtin.debug:
+        msg: "Poste {{ inventory_hostname }} : jonction ymmo.lan + reboot lancés (async)."

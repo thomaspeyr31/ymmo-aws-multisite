@@ -1,0 +1,33 @@
+# /etc/ipsec.conf — strongSwan, passerelle IPSec nomade (IKEv2 road-warrior, EAP-MSCHAPv2).
+# Géré par Ansible (playbooks/configure-vpn.yml). Ne pas éditer à la main.
+config setup
+    charondebug="ike 1, cfg 0"
+    uniqueids=no
+
+conn ikev2-eap
+    auto=add
+    compress=no
+    type=tunnel
+    keyexchange=ikev2
+    fragmentation=yes
+    forceencaps=yes
+    dpdaction=clear
+    dpddelay=300s
+    rekey=no
+    # --- côté passerelle (serveur) ---
+    left=%any
+    leftid={{ vpn_public_ip }}
+    leftcert=server-cert.pem
+    leftsendcert=always
+    leftsubnet=0.0.0.0/0
+    # --- côté client (le Mac nomade) ---
+    right=%any
+    rightid=%any
+    rightauth=eap-mschapv2
+    rightsourceip={{ client_pool }}
+    rightdns={{ dc_ip }}
+    rightsendcert=never
+    eap_identity=%identity
+    # proposales alignées sur le client IKEv2 macOS (AES-256 / SHA2-256 / DH14)
+    ike=aes256-sha256-modp2048
+    esp=aes256-sha256

@@ -1,0 +1,47 @@
+---
+# Promeut l'EC2 Windows en CONTRÔLEUR DE DOMAINE : crée la forêt ymmo.lan.
+# Le compte Administrateur local est d'abord aligné sur notre mot de passe connu,
+# afin qu'après promotion l'Administrateur DU DOMAINE ait ce même mot de passe.
+# Lancement :
+#   ansible-galaxy collection install -r ../requirements.yml
+#   ansible-playbook playbooks/promote-dc.yml \
+#     -e ad_admin_password="$(terraform -chdir=../terraform/environments/demo output -raw ad_admin_password)"
+- name: Promotion du contrôleur de domaine ymmo.lan
+  hosts: dc
+  gather_facts: false
+  tasks:
+    # AMI FRANÇAISE : le compte admin intégré (RID-500) s'appelle "Administrateur".
+    # On pose SON mot de passe avant promotion → il devient l'admin du domaine connu.
+    - name: Aligner le mot de passe de l'Administrateur intégré (FR) = futur admin du domaine
+      ansible.windows.win_user:
+        name: Administrateur
+        password: "{{ ad_admin_password }}"
+        state: present
+
+    - name: Installer les rôles AD DS + DNS
+      ansible.windows.win_feature:
+        name:
+          - AD-Domain-Services
+          - DNS
+        include_management_tools: true
+        state: present
+
+    # Forwarder posé AVANT la promotion : après le reboot, le DC utilise son propre DNS ;
+    # le forwarder garantit la résolution externe (donc l'agent SSM reste joignable).
+    - name: Forwarder DNS vers le résolveur VPC (10.10.0.2)
+      ansible.windows.win_shell: Set-DnsServerForwarder -IPAddress 10.10.0.2 -PassThru
+      changed_when: false
+      ignore_errors: true
+
+    # Promotion en ASYNC (poll:0) : la connexion aws_ssm n'est PAS tenue pendant l'opération
+    # (sinon "worker in a dead state" sur macOS). Install-ADDSForest REBOOTE lui-même la VM
+    # (reboot OS interne — pas besoin de ec2:RebootInstances). Le playbook se termine aussitôt ;
+    # on attend ensuite que le DC revienne (poll SSM externe), puis on lance ad-objects.yml.
+    - name: Promotion en DC — forêt ymmo.lan (async, auto-reboot)
+      ansible.windows.win_shell: |
+        $sp = ConvertTo-SecureString '{{ ad_admin_password }}' -AsPlainText -Force
+        Install-ADDSForest -DomainName ymmo.lan -DomainNetbiosName YMMO `
+          -SafeModeAdministratorPassword $sp -InstallDns -Force
+      async: 60
+      poll: 0
+      no_log: true

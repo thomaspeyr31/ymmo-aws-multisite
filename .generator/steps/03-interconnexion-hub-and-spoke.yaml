@@ -1,0 +1,222 @@
+# =====================================================================
+# Données du step 03 — Interconnexion hub-and-spoke (Transit Gateway) — DÉPLOYÉ
+# Source de vérité du contenu. Régénérer via :
+#   .generator/build_step.sh 03-interconnexion-hub-and-spoke
+# Référence rédactionnelle : docs/notes/etape-hub-and-spoke.md
+# =====================================================================
+
+step:
+  id: "03-interconnexion-hub-and-spoke"
+  title: "Step 03 — Interconnexion hub-and-spoke (AWS Transit Gateway)"
+  subtitle: "Ymmo · relier siège (Aix) et agences (Marseille, Nîmes) — agence↔siège ✓, agence↔agence ✗"
+
+# ---------------------------------------------------------------------
+# DOCUMENT WORD (documentation.docx)
+# ---------------------------------------------------------------------
+sections:
+  - heading: "1. Qu'est-ce qu'une architecture hub-and-spoke ?"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Topologie en étoile : un point central (le hub) par lequel transite tout le trafic, et
+          des branches (spokes) qui ne communiquent qu'à travers le hub, jamais directement. Terme
+          standard, et terme officiel AWS autour du Transit Gateway. Ici : hub = le siège (via un
+          Transit Gateway) ; spokes = les agences. Choisi car scalable (12 agences sans maillage),
+          segmenté par nature, et centralisable pour la sécurité.
+
+  - heading: "2. Schéma — le hub-and-spoke"
+    level: 1
+    body:
+      - type: image
+        path: "schema/hub-and-spoke-transit-gateway.png"
+        caption: "Transit Gateway (hub) + attachments + 2 tables de routage (rt-hub / rt-spokes)."
+        width_in: 6.4
+
+  - heading: "3. Deux couches à distinguer"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Routage (Transit Gateway) : qui peut atteindre qui."
+          - "Flux (Security Groups / NACL) : quels ports, dans quel sens."
+          - "La segmentation agence↔agence vient du ROUTAGE TGW, pas d'un pare-feu."
+
+  - heading: "4. Ressources déployées (Terraform)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Ressource", "Nb", "Rôle"]
+        rows:
+          - ["aws_ec2_transit_gateway", "1", "le hub (tgw-058ec5867…)"]
+          - ["..._vpc_attachment", "3", "1 rattachement par VPC (siège, Marseille, Nîmes)"]
+          - ["..._route_table", "2", "rt-hub (voit tout) / rt-spokes (voit le siège)"]
+          - ["..._route_table_association", "3", "siège→hub ; agences→spokes"]
+          - ["..._route_table_propagation", "4", "hub apprend les 3 sites ; spokes apprend le siège"]
+          - ["aws_route (dans les VPC)", "4", "siège↔agences via TGW (pas agence↔agence)"]
+      - type: paragraph
+        text: "17 ressources, apply propre. Pré-requis : service-linked role AWSServiceRoleForVPCTransitGateway (créé automatiquement)."
+
+  - heading: "5. Validation — la segmentation prouvée par les routes"
+    level: 1
+    body:
+      - type: image
+        path: "schema/validation-routes-securite.png"
+        caption: "Routes apprises par table TGW + flux autorisés/interdits + réflexion sécurité."
+        width_in: 6.6
+      - type: table
+        headers: ["Table TGW", "Associée à", "Routes apprises", "Conséquence"]
+        rows:
+          - ["rt-hub", "siège", "10.10/16 · 10.21/16 · 10.22/16", "le siège atteint les 3 sites"]
+          - ["rt-spokes", "Marseille + Nîmes", "10.10/16 uniquement", "une agence ne route que vers le siège"]
+      - type: paragraph
+        text: >-
+          rt-spokes n'a AUCUNE route vers 10.22/16 (Nîmes) ni 10.21/16 (Marseille) : Marseille ↛ Nîmes.
+          L'isolation agence↔agence est garantie par le ROUTAGE, sans pare-feu.
+
+  - heading: "6. Tous les flux passent — faut-il vraiment un pare-feu (step 4) ?"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          État actuel : entre siège et agence, sur les chemins autorisés (routage + ports ouverts par
+          les Security Groups), le trafic passe LIBREMENT, sans inspection de contenu (pas de pare-feu L7).
+      - type: bullets
+        items:
+          - "En 100 % intra-AWS : trafic jamais sur Internet, serveurs sans IP publique (accès SSM/IAM), segmentation déjà faite → un pare-feu = défense en profondeur (utile, pas vital)."
+          - "Le vrai déclencheur = l'ouverture vers l'EXTÉRIEUR (poste nomade, agence on-prem, sortie Internet)."
+          - "Alors IPSec devient nécessaire (Site-to-Site VPN pour l'on-prem, Client VPN pour le nomade) + Network Firewall pour inspecter la frontière → c'est le STEP 4."
+      - type: paragraph
+        text: >-
+          Conclusion : la sécurité du step 4 (Network Firewall + IPSec) est dimensionnée par
+          l'ouverture vers l'extérieur — c'est exactement ce que le sujet anticipe avec « VPN/IPSec ».
+
+  - heading: "7. Validation par la démo — jonction des postes au domaine via le TGW"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Preuve concrète du hub-and-spoke : un poste Windows par agence (générique, non nominatif)
+          joint le domaine ymmo.lan dont le contrôleur (DC) est au siège. La jonction traverse le
+          Transit Gateway (poste du VPC agence → DC du VPC siège) : si elle réussit, la connectivité
+          siège↔agence est prouvée en conditions réelles.
+      - type: image
+        path: "schema/jonction-postes-domaine.png"
+        caption: "Jonction des postes Marseille/Nîmes au DC du siège à travers le TGW (DNS/Kerberos/LDAP/SMB)."
+        width_in: 6.6
+      - type: table
+        headers: ["Poste", "Site", "IP", "Compte ordinateur AD", "État"]
+        rows:
+          - ["ec2-poste-marseille", "Marseille (10.21)", "10.21.20.115", "EC2AMAZ-KO8OVH4", "joint ✓"]
+          - ["ec2-poste-nimes", "Nîmes (10.22)", "10.22.20.98", "EC2AMAZ-E2UBPL8", "joint ✓"]
+      - type: bullets
+        items:
+          - "Procédé : la NIC du poste pointe sur le DNS du DC (10.10.10.10) → résolution de ymmo.lan → Add-Computer → reboot. Tout est scripté en Ansible (join-postes.yml), exécuté via SSM."
+          - "Les comptes ordinateur des 2 postes apparaissent côté DC (Get-ADComputer) dans CN=Computers — preuve d'inscription dans l'annuaire."
+          - "Aucune route agence↔agence : la jonction n'emprunte QUE le chemin agence→siège (rt-spokes)."
+      - type: paragraph
+        text: >-
+          Périmètre step 03 : on valide UNIQUEMENT la jonction au domaine (les postes sont des
+          ressources partagées, non nominatives). La gestion des droits (matrice par pôle, serveur
+          de fichiers) est réservée au step 04.
+
+  - heading: "8. Poste non nominatif — l'utilisateur s'identifie au login (console vs RDP)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Le poste joint le domaine comme ressource PARTAGÉE : il n'appartient à personne. C'est au LOGIN que l'identité et les droits (issus de l'AD) s'appliquent."
+          - "Non-nominativité vérifiée : marc.lefevre (Nîmes) ouvre aussi une session sur le poste de Marseille, et hugo.faure (Marseille) sur celui de Nîmes."
+          - "Piège console vs RDP : une session console est ouverte à tout utilisateur du domaine ; une session RDP (Fleet Manager) exige EN PLUS le groupe local « Utilisateurs du Bureau à distance »."
+          - "Pour la démo (accès console AWS = RDP), « Utilisateurs du domaine » a été ajouté à ce groupe sur les 2 postes (poste-rdp-access.yml). La restriction par SITE (GPO « Ouvrir une session ») sera la démo du step 04."
+
+  - heading: "9. Vue d'ensemble — état déployé (synthèse)"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-interconnexion.png"
+        caption: "État final du step 03 : 3 VPC reliés par le TGW (rt-hub / rt-spokes), DC au siège, 2 postes d'agence joints à ymmo.lan, segmentation agence↛agence."
+        width_in: 6.8
+      - type: paragraph
+        text: >-
+          Une seule vue rassemble tout le step : le siège (hub) avec son contrôleur de domaine, le
+          Transit Gateway au centre avec ses deux tables de routage, les deux agences (spokes) dont
+          les postes sont joints au domaine à travers le TGW, et la segmentation agence↔agence
+          garantie par le routage. Le provisionnement est 100 % scripté (Terraform + Ansible/SSM).
+
+  - heading: "10. Voir dans la console AWS (pour la démo)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Quoi montrer", "Où (console, région Paris)"]
+        rows:
+          - ["Le hub", "VPC → Transit Gateways (le TGW ymmo)"]
+          - ["Les rattachements (1/VPC)", "VPC → Transit gateway attachments"]
+          - ["La segmentation (preuve)", "VPC → Transit gateway route tables → rt-hub (voit les 3 sites) / rt-spokes (voit le siège seul)"]
+          - ["Les routes côté VPC", "VPC → Route tables (route vers les CIDR distants via le TGW)"]
+          - ["Les postes joints", "EC2 → Instances (ec2-poste-marseille / -nimes) ; côté DC : dsa.msc → conteneur Computers"]
+
+# ---------------------------------------------------------------------
+# PRÉSENTATION POWERPOINT (presentation.pptx)
+# ---------------------------------------------------------------------
+slides:
+  - layout: title
+    title: "Step 03 — Hub-and-spoke (Transit Gateway)"
+    subtitle: "Ymmo · Siège Aix ↔ Agences Marseille / Nîmes"
+
+  - layout: image
+    title: "Le hub-and-spoke"
+    image: "schema/hub-and-spoke-transit-gateway.png"
+    width_in: 8.6
+
+  - layout: content
+    title: "Deux couches"
+    bullets:
+      - "Routage (Transit Gateway) : qui peut atteindre qui"
+      - "Flux (Security Groups) : quels ports"
+      - "Segmentation agence↔agence = ROUTAGE TGW, pas un pare-feu"
+
+  - layout: image
+    title: "Validation : segmentation par les routes"
+    image: "schema/validation-routes-securite.png"
+    width_in: 8.8
+
+  - layout: table
+    title: "Routes apprises (preuve)"
+    headers: ["Table TGW", "Routes", "Conséquence"]
+    rows:
+      - ["rt-hub (siège)", "10.10 · 10.21 · 10.22", "voit les 3 sites"]
+      - ["rt-spokes (agences)", "10.10 seulement", "voit le siège uniquement"]
+
+  - layout: image
+    title: "Démo : jonction des postes au domaine via le TGW"
+    image: "schema/jonction-postes-domaine.png"
+    width_in: 8.8
+
+  - layout: table
+    title: "Postes joints (preuve côté AD)"
+    headers: ["Poste", "IP", "Compte AD", "État"]
+    rows:
+      - ["ec2-poste-marseille", "10.21.20.115", "EC2AMAZ-KO8OVH4", "joint ✓"]
+      - ["ec2-poste-nimes", "10.22.20.98", "EC2AMAZ-E2UBPL8", "joint ✓"]
+
+  - layout: content
+    title: "Poste non nominatif (console vs RDP)"
+    bullets:
+      - "Le poste joint le domaine = ressource partagée ; l'utilisateur s'identifie au login"
+      - "marc.lefevre ouvre une session sur Nîmes ET Marseille (droits issus de l'AD)"
+      - "Console = ouverte à tout user du domaine ; RDP (Fleet Manager) exige « Utilisateurs du Bureau à distance »"
+      - "Restriction par SITE (GPO) → step 04"
+
+  - layout: content
+    title: "Faut-il un pare-feu (step 4) ?"
+    bullets:
+      - "Aujourd'hui tous les flux passent (pas d'inspection L7)"
+      - "100 % intra-AWS → pare-feu = défense en profondeur (pas vital)"
+      - "Ouverture extérieure (poste nomade / on-prem) → IPSec + Network Firewall NÉCESSAIRES"
+      - "→ c'est le step 4 (ce que le sujet anticipe avec VPN/IPSec)"
+
+  - layout: image
+    title: "État déployé — vue d'ensemble"
+    image: "schema/etat-deploye-interconnexion.png"
+    width_in: 9.0

@@ -1,0 +1,180 @@
+# =====================================================================
+# Données du step 04 — Habilitations & serveur de fichiers — DÉPLOYÉ
+# Source de vérité du contenu. Régénérer via :
+#   .generator/build_step.sh 04-habilitations-fileserver
+# =====================================================================
+
+step:
+  id: "04-habilitations-fileserver"
+  title: "Step 04 — Habilitations & serveur de fichiers"
+  subtitle: "Ymmo · matrice des droits par pôle — un espace partagé par groupe (FILESRV)"
+
+# ---------------------------------------------------------------------
+# DOCUMENT WORD (documentation.docx)
+# ---------------------------------------------------------------------
+sections:
+  - heading: "1. Objectif — rendre concrète la matrice des droits"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Le sujet exige une gestion des droits par pôle (lecture / écriture / interdit, slide 3).
+          On la matérialise par un serveur de fichiers au siège qui héberge UN espace partagé par
+          groupe fonction : chaque utilisateur n'accède qu'au partage de son pôle. Les droits
+          suivent l'identité Active Directory (le groupe), pas la machine.
+
+  - heading: "2. Ce qui a été déployé"
+    level: 1
+    body:
+      - type: table
+        headers: ["Élément", "Détail"]
+        rows:
+          - ["EC2 serveur de fichiers", "ec2-fileserver-siege (Windows 2022 FR, t3.large), subnet serveurs du siège"]
+          - ["Nom dans le domaine", "renommé FILESRV, joint à ymmo.lan (10.10.10.8)"]
+          - ["Partages SMB", "5 : Direction, Commercial, CommMktg, AdminRH, IT"]
+          - ["Sécurité réseau", "SG : SMB 445 ouvert à 10.0.0.0/8 → accessible depuis les agences via le TGW"]
+          - ["Provisionnement", "Terraform (EC2, SG) puis Ansible/SSM (jonction + rename, création des partages et ACL)"]
+      - type: paragraph
+        text: >-
+          On réutilise les 5 groupes fonction existants (Direction, Commercial, CommMktg, AdminRH,
+          IT) — pas de nouveau groupe : AdminRH couvre le volet gestion/compta.
+
+  - heading: "3. Deux couches d'autorisation (point clé)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Couche PARTAGE (SMB) : ouverte aux « Utilisateurs authentifiés » — c'est juste la porte d'entrée réseau."
+          - "Couche NTFS (système de fichiers) : héritage COUPÉ, autorise UNIQUEMENT le groupe GRP_<Pôle> (Modifier) + Administrateurs/SYSTEM — c'est le VRAI filtre."
+          - "Conséquence : on peut « ouvrir » le partage d'un autre pôle (la porte est commune), mais on ne peut RIEN y faire — le NTFS bloque. Sécurité portée par les groupes AD."
+
+  - heading: "4. Matrice des droits déployée"
+    level: 1
+    body:
+      - type: table
+        headers: ["Partage", "Groupe autorisé (NTFS)", "Pôle"]
+        rows:
+          - ["\\\\FILESRV\\Direction", "GRP_Direction", "Direction"]
+          - ["\\\\FILESRV\\Commercial", "GRP_Commercial", "Commercial"]
+          - ["\\\\FILESRV\\CommMktg", "GRP_CommMktg", "Communication / Marketing"]
+          - ["\\\\FILESRV\\AdminRH", "GRP_AdminRH", "Administratif / RH (gestion, compta)"]
+          - ["\\\\FILESRV\\IT", "GRP_IT", "IT & Support"]
+
+  - heading: "5. Schéma — état déployé"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-fileserver.png"
+        caption: "FILESRV au siège, 5 partages (ACL = GRP_<Pôle>), deux couches partage/NTFS, test CT-04 depuis une agence via le TGW."
+        width_in: 6.8
+
+  - heading: "6. Cas de test CT-04 — preuve de la matrice"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Acteur : YMMO\\marc.lefevre (membre de GRP_Commercial), mot de passe démo <mot-de-passe-démo>,
+          depuis le poste de Nîmes (l'accès traverse le Transit Gateway). On teste son propre
+          partage puis celui d'un autre pôle.
+      - type: table
+        headers: ["Partage testé", "Pôle de l'acteur", "Attendu", "Obtenu"]
+        rows:
+          - ["\\\\FILESRV\\Commercial", "le sien", "accès autorisé (lecture+écriture)", "✓ OK"]
+          - ["\\\\FILESRV\\AdminRH", "autre pôle", "accès refusé (NTFS)", "✓ refusé (UnauthorizedAccessException)"]
+      - type: paragraph
+        text: >-
+          La connexion au partage AdminRH s'établit (porte commune ouverte aux utilisateurs
+          authentifiés) mais toute action y est refusée : le NTFS, calqué sur GRP_AdminRH, bloque.
+          Réciproque vérifiable en se connectant en YMMO\\nadia.hamon (AdminRH) : accès à AdminRH,
+          refus sur Commercial.
+
+  - heading: "7. Rejouer le test via l'UI Windows (Fleet Manager RDP)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Console AWS Paris → Systems Manager → Explorer les nœuds (Fleet Manager)."
+          - "Sélectionner ec2-poste-nimes → Actions du nœud → Connexion Bureau à distance."
+          - "Auth « Informations d'identification de l'utilisateur » : YMMO\\marc.lefevre / <mot-de-passe-démo>."
+          - "Explorateur de fichiers → barre d'adresse \\\\FILESRV\\Commercial → clic droit → Nouveau → Document texte : fonctionne."
+          - "Barre d'adresse \\\\FILESRV\\AdminRH → tenter Nouveau → Document texte : « Vous n'avez pas l'autorisation… » (refus)."
+      - type: paragraph
+        text: >-
+          Attention à l'orthographe du serveur : FILESRV (et non FILESERV) — un nom mal saisi donne
+          « Windows ne peut pas accéder… vérifiez l'orthographe », ce qui n'a rien à voir avec les droits.
+
+  - heading: "8. Pièges connus (AMI française)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Les comptes intégrés ne se résolvent pas par leur nom anglais sur un Windows FR : utiliser les SID bien connus — Administrateurs locaux S-1-5-32-544, SYSTEM S-1-5-18, Utilisateurs authentifiés S-1-5-11."
+          - "Juste après la jonction+reboot, la résolution d'un groupe de domaine peut échouer un court instant (IdentityNotMappedException) : laisser l'AD se stabiliser, puis relancer (idempotent)."
+          - "Descriptions de Security Group en ASCII pur (pas d'apostrophe ni d'accent)."
+
+  - heading: "9. Vue d'ensemble — état déployé (synthèse)"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-fileserver.png"
+        caption: "Synthèse du step 04 : serveur de fichiers FILESRV + matrice des droits par groupe, validée par CT-04."
+        width_in: 6.8
+      - type: paragraph
+        text: >-
+          Le step 04 livre la dimension « droits » de la sécurité : un serveur de fichiers joint au
+          domaine, un partage par pôle filtré par les groupes AD, accessible depuis les agences via
+          le TGW, et prouvé par un test cross-pôle. Reste, au step 05, la dimension « périmètre »
+          (accès nomade IPSec + pare-feu d'inspection).
+
+  - heading: "10. Voir dans la console AWS (pour la démo)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Quoi montrer", "Où (console, région Paris)"]
+        rows:
+          - ["Le serveur de fichiers", "EC2 → Instances (ec2-fileserver-siege = FILESRV)"]
+          - ["Ouvrir une session de test", "Systems Manager → Fleet Manager → ec2-poste-nimes → Remote Desktop (YMMO\\marc.lefevre)"]
+          - ["Les partages + le refus", "(en session) Explorateur → \\\\FILESRV\\Commercial (OK) vs \\\\FILESRV\\AdminRH (refusé)"]
+          - ["L'accès réseau", "EC2 → Security Groups (sg-ymmo-fileserver : SMB 445 depuis 10.0.0.0/8)"]
+
+# ---------------------------------------------------------------------
+# PRÉSENTATION POWERPOINT (presentation.pptx)
+# ---------------------------------------------------------------------
+slides:
+  - layout: title
+    title: "Step 04 — Habilitations & serveur de fichiers"
+    subtitle: "Ymmo · un espace partagé par groupe (FILESRV)"
+
+  - layout: content
+    title: "Objectif"
+    bullets:
+      - "Matrice des droits par pôle (slide 3 du sujet) rendue concrète"
+      - "Serveur de fichiers au siège : un partage SMB par groupe fonction"
+      - "Les droits suivent l'identité AD (le groupe), pas la machine"
+
+  - layout: content
+    title: "Deux couches d'autorisation"
+    bullets:
+      - "PARTAGE SMB = ouvert aux Utilisateurs authentifiés (la porte d'entrée)"
+      - "NTFS = héritage coupé, autorise UNIQUEMENT GRP_<Pôle> (le vrai filtre)"
+      - "→ on peut ouvrir un autre partage, mais on n'y peut RIEN faire"
+
+  - layout: image
+    title: "État déployé — vue d'ensemble"
+    image: "schema/etat-deploye-fileserver.png"
+    width_in: 9.0
+
+  - layout: table
+    title: "CT-04 — preuve de la matrice (marc.lefevre, Commercial)"
+    headers: ["Partage", "Attendu", "Obtenu"]
+    rows:
+      - ["\\\\FILESRV\\Commercial", "autorisé", "✓ OK (écriture)"]
+      - ["\\\\FILESRV\\AdminRH", "refusé", "✓ refusé (NTFS)"]
+
+  - layout: content
+    title: "Tester via l'UI (Fleet Manager RDP)"
+    bullets:
+      - "Systems Manager → Explorer les nœuds → ec2-poste-nimes → Connexion Bureau à distance"
+      - "User credentials : YMMO\\marc.lefevre / <mot-de-passe-démo>"
+      - "\\\\FILESRV\\Commercial → créer un fichier : OK ; \\\\FILESRV\\AdminRH → refus"
+      - "Attention au nom : FILESRV (pas FILESERV)"

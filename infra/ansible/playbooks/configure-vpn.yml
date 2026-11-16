@@ -1,0 +1,132 @@
+---
+# Configure la passerelle IPSec nomade (strongSwan, IKEv2 road-warrior, EAP-MSCHAPv2)
+# et génère le profil .mobileconfig à double-cliquer sur le Mac.
+#
+# Lancement :
+#   TF=../terraform/environments/demo
+#   ansible-playbook -i inventory/aws_ec2.yml playbooks/configure-vpn.yml \
+#     -e vpn_public_ip="$(terraform -chdir=$TF output -json vpn_gateway | jq -r .public_ip)" \
+#     -e vpn_eap_user="$(terraform -chdir=$TF output -json vpn_gateway | jq -r .eap_user)" \
+#     -e vpn_eap_password="$(terraform -chdir=$TF output -raw vpn_eap_password)"
+- name: Passerelle IPSec nomade — strongSwan + profil macOS
+  hosts: vpn_gateway
+  gather_facts: false
+  vars:
+    client_pool: "10.10.50.0/24"
+    dc_ip: "10.10.10.10"
+    d: "/etc/ipsec.d"
+  tasks:
+    - name: Installer strongSwan + plugins (EAP, pki)
+      ansible.builtin.apt:
+        name:
+          - strongswan
+          - strongswan-pki
+          - libcharon-extra-plugins
+          - libstrongswan-extra-plugins
+        update_cache: true
+        state: present
+
+    # --- PKI : CA + certificat serveur (idempotent via creates) ---
+    - name: Générer la clé + le certificat de l'autorité (CA)
+      ansible.builtin.shell: |
+        set -e
+        pki --gen --type rsa --size 4096 --outform pem > {{ d }}/private/ca-key.pem
+        chmod 600 {{ d }}/private/ca-key.pem
+        pki --self --ca --lifetime 3650 --in {{ d }}/private/ca-key.pem --type rsa \
+            --dn "CN=Ymmo VPN CA" --outform pem > {{ d }}/cacerts/ca-cert.pem
+      args:
+        creates: "{{ d }}/cacerts/ca-cert.pem"
+
+    - name: Générer la clé + le certificat serveur (SAN = IP publique)
+      ansible.builtin.shell: |
+        set -e
+        pki --gen --type rsa --size 4096 --outform pem > {{ d }}/private/server-key.pem
+        chmod 600 {{ d }}/private/server-key.pem
+        pki --pub --in {{ d }}/private/server-key.pem --type rsa | \
+          pki --issue --lifetime 1825 --cacert {{ d }}/cacerts/ca-cert.pem \
+              --cakey {{ d }}/private/ca-key.pem --dn "CN={{ vpn_public_ip }}" \
+              --san "{{ vpn_public_ip }}" --flag serverAuth --flag ikeIntermediate \
+              --outform pem > {{ d }}/certs/server-cert.pem
+      args:
+        creates: "{{ d }}/certs/server-cert.pem"
+
+    - name: Écrire /etc/ipsec.conf
+      ansible.builtin.template:
+        src: templates/ipsec.conf.j2
+        dest: /etc/ipsec.conf
+        mode: "0644"
+      notify: restart strongswan
+
+    - name: Écrire /etc/ipsec.secrets
+      ansible.builtin.template:
+        src: templates/ipsec.secrets.j2
+        dest: /etc/ipsec.secrets
+        mode: "0600"
+      notify: restart strongswan
+
+    # --- Routage : forwarding + masquerade du pool client vers le VPC ---
+    - name: Activer le routage IPv4 (persistant) — fichier sysctl.d
+      ansible.builtin.copy:
+        dest: /etc/sysctl.d/99-vpn-forward.conf
+        content: "net.ipv4.ip_forward=1\n"
+        mode: "0644"
+      register: ipfwd
+
+    - name: Appliquer le routage IPv4
+      ansible.builtin.command: sysctl --system
+      when: ipfwd is changed
+      changed_when: ipfwd is changed
+
+    - name: Masquerade du pool nomade vers le VPC (le trafic ressort avec l'IP de la passerelle)
+      ansible.builtin.iptables:
+        table: nat
+        chain: POSTROUTING
+        source: "{{ client_pool }}"
+        jump: MASQUERADE
+        comment: "VPN nomade -> VPC (masquerade)"
+
+    - name: Autoriser le forwarding du pool nomade
+      ansible.builtin.iptables:
+        chain: FORWARD
+        source: "{{ item.s | default(omit) }}"
+        destination: "{{ item.d | default(omit) }}"
+        jump: ACCEPT
+        comment: "VPN nomade forward"
+      loop:
+        - { s: "{{ client_pool }}" }
+        - { d: "{{ client_pool }}" }
+
+    - name: Activer strongSwan au démarrage
+      ansible.builtin.service:
+        name: strongswan-starter
+        enabled: true
+        state: started
+
+    # --- Génération du profil .mobileconfig pour le Mac ---
+    - name: Récupérer le certificat CA en DER base64 (pour le profil)
+      ansible.builtin.shell: "openssl x509 -in {{ d }}/cacerts/ca-cert.pem -outform der | base64 -w0"
+      register: ca_der
+      changed_when: false
+
+    - name: Générer le profil .mobileconfig sur le poste de contrôle
+      ansible.builtin.template:
+        src: templates/ymmo-vpn.mobileconfig.j2
+        dest: "{{ playbook_dir }}/../generated/ymmo-vpn.mobileconfig"
+        mode: "0600"
+      delegate_to: localhost
+      become: false
+      vars:
+        ca_cert_der_b64: "{{ ca_der.stdout }}"
+        ansible_connection: local
+        ansible_shell_type: sh
+        ansible_python_interpreter: "{{ ansible_playbook_python }}"
+
+    - name: Où trouver le profil
+      ansible.builtin.debug:
+        msg: "Profil généré : infra/ansible/generated/ymmo-vpn.mobileconfig — à double-cliquer sur le Mac."
+
+  handlers:
+    - name: restart strongswan
+      ansible.builtin.service:
+        name: strongswan-starter
+        state: restarted

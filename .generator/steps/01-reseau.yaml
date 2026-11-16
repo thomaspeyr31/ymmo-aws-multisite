@@ -1,0 +1,177 @@
+# =====================================================================
+# Données du step 01 — Réseau (Phase 1) — DÉPLOYÉ
+# Source de vérité du contenu. Régénérer via :
+#   .generator/build_step.sh 01-reseau
+# Style dans les templates .generator/templates/*. Pas de style ici.
+# =====================================================================
+
+step:
+  id: "01-reseau"
+  title: "Step 01 — Réseau multi-sites (3 VPC isolés)"
+  subtitle: "Ymmo · Phase 1 du déploiement · eu-west-3 (Paris) · état déployé : 60 ressources"
+
+# ---------------------------------------------------------------------
+# DOCUMENT WORD (documentation.docx)
+# ---------------------------------------------------------------------
+sections:
+  - heading: "1. Objectif & périmètre"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Poser le socle réseau de l'infrastructure Ymmo : un VPC isolé et autonome par
+          entité (siège d'Aix + agences Marseille et Nîmes), avec sortie Internet maîtrisée,
+          avant toute interconnexion. Aucun lien inter-site à ce stade — c'est l'objet du
+          step 03 (Transit Gateway).
+      - type: bullets
+        items:
+          - "3 VPC /16 à CIDR non chevauchants (impératif pour le futur TGW / VPN)."
+          - "3 tiers par VPC : public, serveurs, postes — chacun réparti sur 2 AZ."
+          - "Tier serveurs multi-AZ : pré-requis du futur AWS Managed Microsoft AD."
+          - "Sortie Internet par site via NAT Gateway + Internet Gateway."
+          - "Tout en Terraform, déployable/détruisible from scratch."
+
+  - heading: "2. Schéma de l'état déployé"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-reseau.png"
+        caption: "État réellement déployé en eu-west-3 (IDs de VPC, CIDR /25 par AZ, IP des NAT)."
+        width_in: 6.5
+
+  - heading: "3. Plan d'adressage IP"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          CIDR /16 par site, agrégeables en 10.0.0.0/8 et extensibles aux 12 agences
+          (10.2x.0.0/16). Chaque tier /24 est découpé en deux /25, un par zone de disponibilité.
+      - type: table
+        headers: ["Site", "VPC CIDR", "Public (a / b)", "Serveurs (a / b)", "Postes (a / b)"]
+        rows:
+          - ["Siège (Aix)", "10.10.0.0/16", "10.10.0.0/25 · .0.128/25", "10.10.10.0/25 · .10.128/25", "10.10.20.0/25 · .20.128/25"]
+          - ["Marseille", "10.21.0.0/16", "10.21.0.0/25 · .0.128/25", "10.21.10.0/25 · .10.128/25", "10.21.20.0/25 · .20.128/25"]
+          - ["Nîmes", "10.22.0.0/16", "10.22.0.0/25 · .0.128/25", "10.22.10.0/25 · .10.128/25", "10.22.20.0/25 · .20.128/25"]
+
+  - heading: "4. Ressources déployées"
+    level: 1
+    body:
+      - type: paragraph
+        text: "60 ressources au total (20 par VPC). State Terraform : s3://<bucket-tfstate>/ymmo-filerouge/demo."
+      - type: table
+        headers: ["Site", "VPC ID", "NAT — IP publique"]
+        rows:
+          - ["Siège", "vpc-04ccef2a5305e7188", "13.37.194.252"]
+          - ["Marseille", "vpc-029b8be2597682a12", "52.47.213.19"]
+          - ["Nîmes", "vpc-0605046f3bd3fb0f1", "13.37.56.152"]
+      - type: table
+        headers: ["Type de ressource", "Nb / VPC", "Total"]
+        rows:
+          - ["VPC", "1", "3"]
+          - ["Subnets (3 tiers × 2 AZ)", "6", "18"]
+          - ["Internet Gateway", "1", "3"]
+          - ["Elastic IP + NAT Gateway", "1 + 1", "3 + 3"]
+          - ["Route tables (public + privée)", "2", "6"]
+          - ["Associations route table", "6", "18"]
+          - ["DHCP options (+ association)", "1", "3"]
+
+  - heading: "5. Infrastructure as Code"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Module réutilisable infra/terraform/modules/network — 1 appel par site (for_each)."
+          - "Environnement infra/terraform/environments/demo — instancie les 3 VPC."
+          - "Backend S3 : bucket <bucket-tfstate>, clé ymmo-filerouge/demo, verrou natif S3 (use_lockfile), chiffré."
+          - "Terraform 1.14.1 · provider AWS ~> 5.0 (5.100.0) · région eu-west-3."
+          - "DHCP options = AmazonProvidedDNS pour l'instant (pointera vers l'AD au step 02/03)."
+
+  - heading: "6. Sécurité & moindre privilège — preflight IAM"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Le compte de déploiement a des habilitations IAM
+          restreintes (least-privilege). Un preflight bloque tout apply tant que les droits
+          nécessaires ne sont pas accordés (early-fail), avant toute tentative de création.
+      - type: bullets
+        items:
+          - "Mécanisme : dry-run EC2 réels (vérité terrain), pas la simulation IAM."
+          - "Règle : seul UnauthorizedOperation = refus ; le reste = autorisé."
+          - "Piège élucidé : la policy réseau est conditionnée à eu-west-3 — le preflight doit tester dans cette région."
+          - "Les actions de création (CreateVpc, CreateSubnet, CreateNatGateway…) ont dû être ajoutées au rôle de déploiement (policy VPCNetworkingParis)."
+
+  - heading: "7. Validation & cycle de vie"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "terraform validate : OK ; terraform plan : 60 to add ; apply : 60 ressources créées et confirmées côté AWS."
+          - "3 NAT Gateways en état available avec IP publique — sortie Internet par site opérationnelle."
+          - "Coût : seuls les 3 NAT Gateways sont facturés en continu (~0,05 €/h chacun) → terraform destroy après démo."
+          - "À venir (step 02) : test d'egress bout-en-bout via une EC2, puis Managed AD."
+
+  - heading: "8. Voir dans la console AWS (pour la démo)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Quoi montrer", "Où (console, région Paris)"]
+        rows:
+          - ["Les 3 VPC", "VPC → Your VPCs (vpc-siege / vpc-marseille / vpc-nimes)"]
+          - ["Les sous-réseaux (public / serveurs / postes)", "VPC → Subnets (filtrer par VPC)"]
+          - ["La sortie Internet", "VPC → NAT Gateways (1 par VPC) + Internet Gateways"]
+          - ["Le routage", "VPC → Route tables (rt-public / rt-private par site)"]
+          - ["Le DHCP", "VPC → DHCP option sets"]
+
+# ---------------------------------------------------------------------
+# PRÉSENTATION POWERPOINT (presentation.pptx)
+# ---------------------------------------------------------------------
+slides:
+  - layout: title
+    title: "Step 01 — Réseau multi-sites Ymmo"
+    subtitle: "3 VPC isolés · eu-west-3 (Paris) · 60 ressources déployées"
+
+  - layout: image
+    title: "État déployé"
+    image: "schema/etat-deploye-reseau.png"
+    width_in: 8.6
+
+  - layout: content
+    title: "Objectif de la Phase 1"
+    bullets:
+      - "Un VPC isolé et autonome par entité (siège + 2 agences)"
+      - "3 tiers (public / serveurs / postes) sur 2 AZ"
+      - "Sortie Internet par site (NAT + IGW), pas encore d'interconnexion"
+      - "CIDR non chevauchants — pré-requis du futur Transit Gateway"
+
+  - layout: table
+    title: "Plan d'adressage"
+    headers: ["Site", "VPC CIDR", "NAT IP"]
+    rows:
+      - ["Siège (Aix)", "10.10.0.0/16", "13.37.194.252"]
+      - ["Marseille", "10.21.0.0/16", "52.47.213.19"]
+      - ["Nîmes", "10.22.0.0/16", "13.37.56.152"]
+
+  - layout: content
+    title: "Infrastructure as Code"
+    bullets:
+      - "Module network réutilisable, 1 appel par site (for_each)"
+      - "Backend S3 <bucket-tfstate> (verrou natif, chiffré)"
+      - "Terraform 1.14.1 · provider AWS 5.x · eu-west-3"
+      - "60 ressources : 3 VPC, 18 subnets, 3 IGW, 3 NAT, route tables, DHCP"
+
+  - layout: content
+    title: "Moindre privilège : preflight IAM (early-fail)"
+    bullets:
+      - "Rôle de déploiement à droits IAM restreints"
+      - "Preflight par dry-run EC2 réels avant tout apply"
+      - "Bloque la création tant que les droits manquent"
+      - "Policy réseau conditionnée à eu-west-3 (least-privilege par région)"
+
+  - layout: content
+    title: "Validation & coût"
+    bullets:
+      - "apply : 60 ressources créées, 3 NAT available"
+      - "Sortie Internet par site opérationnelle"
+      - "Seuls les NAT sont facturés → destroy après démo"
+      - "Suite : step 02 (compute + Active Directory)"

@@ -1,0 +1,66 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="ymmo-step03-jonction" name="Step 03 — jonction des postes au domaine via TGW">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1720" pageHeight="980" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Step 03 — Jonction des postes d'agence au domaine ymmo.lan À TRAVERS le Transit Gateway" style="text;html=1;align=center;fontSize=18;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="20" y="8" width="1680" height="30" as="geometry" />
+        </mxCell>
+
+        <!-- Siège / DC -->
+        <mxCell id="siege" value="VPC Siège (HUB) · 10.10.0.0/16" style="rounded=1;arcSize=4;fillColor=#FBFEFF;strokeColor=#29B6D6;strokeWidth=2;fontSize=14;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=8;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="700" y="120" width="320" height="190" as="geometry" />
+        </mxCell>
+        <mxCell id="dc" value="DC ymmo.lan&#10;10.10.10.10&#10;AD DS + DNS" style="rounded=1;arcSize=10;fillColor=#2D3570;fontColor=#FFFFFF;strokeColor=#1B2150;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="780" y="180" width="160" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- TGW -->
+        <mxCell id="tgw" value="AWS Transit Gateway (hub)&#10;rt-hub voit les 3 sites · rt-spokes voit le siège" style="rounded=1;arcSize=10;fillColor=#29B6D6;fontColor=#FFFFFF;strokeColor=#1E8FA8;fontSize=14;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="690" y="430" width="340" height="80" as="geometry" />
+        </mxCell>
+
+        <!-- Postes agences -->
+        <mxCell id="mars" value="VPC Marseille · 10.21.0.0/16" style="rounded=1;arcSize=4;fillColor=#FBFCFE;strokeColor=#B0B8C0;fontSize=13;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=8;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="120" y="600" width="300" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="pmars" value="Poste Marseille&#10;EC2AMAZ-KO8OVH4&#10;10.21.20.115&#10;joint à ymmo.lan ✓" style="rounded=1;arcSize=10;fillColor=#A8E8D8;fontColor=#1B5E20;strokeColor=#80D0C0;fontSize=12;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="160" y="650" width="220" height="100" as="geometry" />
+        </mxCell>
+
+        <mxCell id="nimes" value="VPC Nîmes · 10.22.0.0/16" style="rounded=1;arcSize=4;fillColor=#FBFCFE;strokeColor=#B0B8C0;fontSize=13;fontStyle=1;fontFamily=Helvetica;verticalAlign=top;spacingTop=8;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1300" y="600" width="300" height="170" as="geometry" />
+        </mxCell>
+        <mxCell id="pnimes" value="Poste Nîmes&#10;EC2AMAZ-E2UBPL8&#10;10.22.20.98&#10;joint à ymmo.lan ✓" style="rounded=1;arcSize=10;fillColor=#A8E8D8;fontColor=#1B5E20;strokeColor=#80D0C0;fontSize=12;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="650" width="220" height="100" as="geometry" />
+        </mxCell>
+
+        <!-- liens via TGW -->
+        <mxCell id="e_dc_tgw" value="" style="endArrow=none;strokeColor=#1E8FA8;strokeWidth=2.5;" edge="1" parent="1" source="siege" target="tgw"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m_tgw" value="attachment" style="endArrow=none;strokeColor=#1E8FA8;strokeWidth=2.5;fontSize=11;fontColor=#1E8FA8;" edge="1" parent="1" source="pmars" target="tgw"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_n_tgw" value="attachment" style="endArrow=none;strokeColor=#1E8FA8;strokeWidth=2.5;fontSize=11;fontColor=#1E8FA8;" edge="1" parent="1" source="pnimes" target="tgw"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- flux jonction -->
+        <mxCell id="fluxbox" value="Flux de jonction (poste → DC à travers le TGW)&#10;DNS 53 · Kerberos 88 · LDAP 389 · SMB 445 · RPC dyn.&#10;&#10;1) NIC du poste → DNS du DC (10.10.10.10)&#10;2) résolution ymmo.lan → Add-Computer → reboot&#10;3) compte ordinateur créé dans CN=Computers" style="rounded=1;arcSize=6;fillColor=#EEF0F8;strokeColor=#2D3570;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;fontSize=12;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="120" width="380" height="170" as="geometry" />
+        </mxCell>
+
+        <!-- preuve -->
+        <mxCell id="preuve" value="✓ La jonction PROUVE la connectivité siège↔agence : un poste du VPC agence a contacté le DC du VPC siège via le TGW. Sans hub-and-spoke, échec." style="rounded=1;arcSize=8;fillColor=#A8E8D8;fontColor=#1B5E20;strokeColor=#80D0C0;align=left;spacingLeft=10;spacingTop=4;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="810" width="1600" height="40" as="geometry" />
+        </mxCell>
+
+        <!-- non nominatif + console/rdp -->
+        <mxCell id="nonnom" value="&lt;b&gt;Poste NON nominatif&lt;/b&gt; : l'ordinateur joint le domaine comme RESSOURCE PARTAGÉE. L'utilisateur s'identifie AU LOGIN — ses droits viennent de l'AD.&lt;br&gt;marc.lefevre (Nîmes) ouvre une session sur Marseille AUSSI ; hugo.faure (Marseille) sur Nîmes. La machine ne détermine rien." style="rounded=1;arcSize=6;fillColor=#FFF8EE;strokeColor=#D89A3C;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;fontSize=12;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="60" y="865" width="790" height="95" as="geometry" />
+        </mxCell>
+        <mxCell id="consrdp" value="&lt;b&gt;Console vs RDP&lt;/b&gt; (piège) : la session CONSOLE est ouverte à tout user du domaine. La session RDP (Fleet Manager) exige EN PLUS le groupe local « Utilisateurs du Bureau à distance ».&lt;br&gt;→ on y a ajouté « Utilisateurs du domaine » sur les 2 postes. Restriction par SITE (GPO) = step 04." style="rounded=1;arcSize=6;fillColor=#FFF0E8;strokeColor=#D89A3C;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;fontSize=12;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="870" y="865" width="790" height="95" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

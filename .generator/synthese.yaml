@@ -1,0 +1,131 @@
+# =====================================================================
+# Synthèse du projet — reprend chaque step (objectif / pourquoi / lien sujet + schéma).
+# Régénérer : .venv/bin/python .generator/gen_step_docx.py \
+#   --yaml .generator/synthese.yaml --template .generator/templates/step-template.docx --out ./synthese.docx
+# Les chemins d'images sont relatifs à la RACINE du projet (dossier de sortie).
+# =====================================================================
+
+step:
+  title: "Synthèse — Projet Fil Rouge B2 · Ymmo"
+  subtitle: "Infrastructure cloud-native AWS — démarche par couches (steps 1 à 6)"
+
+sections:
+  - heading: "Contexte & démarche"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Ymmo est un groupe immobilier (siège à Aix-en-Provence + 12 agences) qui veut digitaliser
+          et SÉCURISER son système d'information. Le sujet demande une « architecture réseau
+          multi-sites, sécurisée et scalable » avec interconnexion VPN/IPSec, pare-feu, gestion des
+          droits, sauvegarde et supervision.
+      - type: paragraph
+        text: >-
+          Choix retenu (validé) : tout en CLOUD-NATIF AWS, 100 % Infrastructure as Code
+          (Terraform pour les ressources, Ansible pour la configuration des serveurs). L'infra se
+          déploie et se détruit à la demande (modèle éphémère, coût maîtrisé). La démonstration est
+          restreinte au siège + 2 agences (Marseille, Nîmes), mais l'architecture est extensible aux 12.
+      - type: paragraph
+        text: >-
+          Fil conducteur : on construit par COUCHES, chacune posée sur la précédente — réseau, puis
+          serveurs/annuaire, puis interconnexion, puis droits, puis sécurité du périmètre, puis
+          sauvegarde/supervision. Chaque couche est documentée et rejouable.
+
+  - heading: "Step 1 — Réseau (les fondations)"
+    level: 1
+    body:
+      - type: table
+        headers: ["", ""]
+        rows:
+          - ["Objectif", "Construire le socle : un réseau cloud isolé par entité (1 VPC pour le siège + 1 par agence), découpé en sous-réseaux, avec une sortie Internet maîtrisée (NAT)."]
+          - ["Pourquoi", "Tout le reste se pose dessus. Isoler chaque site dès le départ réduit la surface d'attaque et permet de contrôler qui peut parler à qui (segmentation)."]
+          - ["Lien avec le sujet", "Répond à « Architecture réseau multi-sites » (fortement pondérée) et « Plan d'adressage IP » : 1 VPC = 1 site, des plages d'adresses qui ne se chevauchent pas (pré-requis pour relier les sites ensuite)."]
+      - type: image
+        path: "steps/01-reseau/schema/etat-deploye-reseau.png"
+        caption: "Step 1 — 3 VPC isolés (siège + 2 agences) avec sortie Internet."
+        width_in: 6.2
+
+  - heading: "Step 2 — Serveurs & annuaire Active Directory"
+    level: 1
+    body:
+      - type: table
+        headers: ["", ""]
+        rows:
+          - ["Objectif", "Déployer un serveur Windows promu contrôleur de domaine (forêt ymmo.lan) + un poste d'administration, et créer les utilisateurs et groupes de l'entreprise."]
+          - ["Pourquoi", "Centraliser les identités (qui est qui, qui appartient à quel pôle) : c'est le cœur d'un SI d'entreprise et le pré-requis pour gérer les droits ensuite."]
+          - ["Lien avec le sujet", "Répond au besoin « serveurs + postes » et à la gestion des utilisateurs/GPO. Le modèle de droits du sujet (matrice par pôle) est traduit en groupes Active Directory."]
+      - type: image
+        path: "steps/02-compute-directory/schema/etat-deploye-ad.png"
+        caption: "Step 2 — Contrôleur de domaine ymmo.lan + annuaire (OU, groupes, utilisateurs)."
+        width_in: 6.2
+
+  - heading: "Step 3 — Interconnexion en étoile (hub-and-spoke)"
+    level: 1
+    body:
+      - type: table
+        headers: ["", ""]
+        rows:
+          - ["Objectif", "Relier les 3 réseaux en ÉTOILE via un Transit Gateway : chaque agence atteint le siège, mais les agences ne se voient PAS entre elles."]
+          - ["Pourquoi", "Les agences doivent accéder aux services du siège (annuaire, fichiers) sans pouvoir communiquer directement entre elles — moindre exposition, segmentation par le routage."]
+          - ["Lien avec le sujet", "Répond à « VPN/IPSec siège ↔ agences » (le sujet ne demande RIEN entre agences → topologie étoile). Le Transit Gateway transporte le trafic chiffré sur le réseau privé d'AWS."]
+      - type: image
+        path: "steps/03-interconnexion-hub-and-spoke/schema/etat-deploye-interconnexion.png"
+        caption: "Step 3 — Transit Gateway : siège ↔ agences OK, agence ↛ agence."
+        width_in: 6.4
+
+  - heading: "Step 4 — Habilitations & serveur de fichiers"
+    level: 1
+    body:
+      - type: table
+        headers: ["", ""]
+        rows:
+          - ["Objectif", "Déployer un serveur de fichiers avec un espace partagé par pôle, dont l'accès est filtré par le groupe Active Directory de l'utilisateur."]
+          - ["Pourquoi", "Donner à chacun l'accès à SES données et pas à celles des autres (confidentialité, moindre privilège). Centraliser les données rend aussi les postes jetables."]
+          - ["Lien avec le sujet", "Répond directement à la « matrice des droits par pôle » (lecture / écriture / interdit) : les permissions NTFS du serveur de fichiers reflètent les groupes AD."]
+      - type: image
+        path: "steps/04-habilitations-fileserver/schema/etat-deploye-fileserver.png"
+        caption: "Step 4 — Un partage par pôle, filtré par groupe AD (matrice des droits)."
+        width_in: 6.4
+
+  - heading: "Step 5 — Accès nomade (IPSec) & pare-feu"
+    level: 1
+    body:
+      - type: table
+        headers: ["", ""]
+        rows:
+          - ["Objectif", "Deux briques : (1) ouvrir un accès distant CHIFFRÉ pour un poste nomade (tunnel IPSec) ; (2) FILTRER les flux sortants avec un pare-feu (ex. blocage de Facebook)."]
+          - ["Pourquoi", "Le télétravail impose un accès sécurisé depuis l'extérieur ; le pare-feu contrôle ce qui sort de l'entreprise (anti-exfiltration, conformité, inspection de la frontière)."]
+          - ["Lien avec le sujet", "Répond à « VPN/IPSec » (réalisé en IKEv2 pour le nomade) et à « Pare-feu, filtrage, segmentation » (AWS Network Firewall en sortie du siège)."]
+      - type: image
+        path: "steps/05-ipsec-firewall/schema/etat-deploye-01-ipsec-nomadisme.png"
+        caption: "Step 5 (1/2) — Accès nomade par tunnel IPSec vers le siège."
+        width_in: 6.4
+      - type: image
+        path: "steps/05-ipsec-firewall/schema/etat-deploye-02-firewall.png"
+        caption: "Step 5 (2/2) — Pare-feu : filtrage des flux sortants (blocage de domaines)."
+        width_in: 6.4
+
+  - heading: "Step 6 — Sauvegarde & supervision"
+    level: 1
+    body:
+      - type: table
+        headers: ["", ""]
+        rows:
+          - ["Objectif", "Sauvegarder la VALEUR (les données du serveur de fichiers + l'annuaire) avec AWS Backup, et superviser les serveurs (alarmes + tableau de bord + alertes)."]
+          - ["Pourquoi", "Se prémunir d'une perte ou corruption de données (continuité d'activité) et détecter les incidents tôt. On ne sauvegarde pas les postes : ils sont jetables, la donnée est centralisée."]
+          - ["Lien avec le sujet", "Répond à « Mises à jour, plan de backup » et « Plan de sauvegarde & supervision ». AWS Backup (managé) remplace le serveur de sauvegarde on-prem."]
+      - type: image
+        path: "steps/06-backup-supervision/schema/etat-deploye-backup-supervision.png"
+        caption: "Step 6 — AWS Backup (data + annuaire) + supervision CloudWatch."
+        width_in: 6.6
+
+  - heading: "Bilan"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "6 couches déployées, chacune documentée, testée et REJOUABLE (un script reconstruit tout depuis zéro)."
+          - "Tout est Infrastructure as Code (Terraform + Ansible) : aucune action manuelle en console pour provisionner."
+          - "Sécurité par couches : isolation réseau, identités centralisées, segmentation, droits par pôle, accès chiffré, pare-feu, sauvegarde."
+          - "Coût maîtrisé : modèle éphémère (apply le matin / destroy le soir) — détail dans l'estimation de coûts."
+          - "Reste à venir : ancrage de l'application DEV (base de données RDS) et finalisation de la démonstration."

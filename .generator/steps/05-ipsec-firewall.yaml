@@ -1,0 +1,183 @@
+# =====================================================================
+# Données du step 05 — IPSec & nomadisme + pare-feu — DÉPLOYÉ
+# Régénérer : .generator/build_step.sh 05-ipsec-firewall
+# =====================================================================
+
+step:
+  id: "05-ipsec-firewall"
+  title: "Step 05 — IPSec & nomadisme + pare-feu (Network Firewall)"
+  subtitle: "Ymmo · ouvrir un accès nomade chiffré (1/2) + filtrer les flux sortants (2/2)"
+
+sections:
+  - heading: "1. Deux briques en une étape"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Ce step couvre la dimension « périmètre » de la sécurité, en DEUX briques distinctes qui
+          auraient pu faire l'objet de deux steps séparés — on les garde ensemble ici :
+      - type: bullets
+        items:
+          - "Brique 1 — Accès NOMADE par IPSec : OUVRIR un accès distant chiffré (un poste hors entreprise atteint le siège)."
+          - "Brique 2 — Pare-feu d'egress : FILTRER les flux sortants (illustré par le blocage de Facebook)."
+      - type: paragraph
+        text: >-
+          Les deux sont indépendantes : l'une ouvre une porte (entrant), l'autre contrôle la sortie.
+
+  - heading: "2. Brique 1 — Accès nomade IPSec"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          IPSec n'est PAS utile pour relier agence et siège : le Transit Gateway transporte déjà ce
+          trafic sur le backbone privé AWS (chiffré, jamais sur Internet). IPSec n'a de sens que pour
+          faire ENTRER un accès depuis Internet — ici un poste nomade (Mac en télétravail).
+      - type: image
+        path: "schema/etat-deploye-01-ipsec-nomadisme.png"
+        caption: "Tunnel IKEv2/IPSec : Mac nomade → passerelle strongSwan (EIP, siège) → DC + FILESRV."
+        width_in: 6.8
+      - type: table
+        headers: ["Élément", "Détail"]
+        rows:
+          - ["Passerelle", "EC2 Ubuntu strongSwan (IKEv2 road-warrior), subnet public du siège + EIP"]
+          - ["Authentification", "EAP-MSCHAPv2 (identifiant « nomade » + mot de passe généré)"]
+          - ["Client", "client IKEv2 NATIF macOS — profil .mobileconfig (CA + VPN) à double-cliquer"]
+          - ["Accès interne", "masquerade + DNS poussé = DC → résout ymmo.lan, atteint DC et FILESRV"]
+      - type: paragraph
+        text: >-
+          Comparaison jury : AWS Client VPN existe mais est en TLS/OpenVPN — ici on fait du vrai IPSec
+          (IKEv2), ce qui colle au libellé « VPN/IPSec » du sujet.
+
+  - heading: "3. CT-05 — l'accès nomade prouvé"
+    level: 1
+    body:
+      - type: table
+        headers: ["Action (depuis le Mac, hors réseau)", "Attendu", "Obtenu"]
+        rows:
+          - ["Connexion VPN IKEv2", "tunnel monté", "✓"]
+          - ["smb://filesrv.ymmo.lan/Commercial (compte marc.lefevre)", "autorisé (son pôle)", "✓ OK"]
+          - ["smb://filesrv.ymmo.lan/AdminRH", "refusé (NTFS)", "✓ refusé"]
+      - type: paragraph
+        text: "La sécurité dépend de l'identité AD, pas de la localisation. Les droits du step 04 s'appliquent au nomade."
+
+  - heading: "4. Brique 2 — Pare-feu d'egress (AWS Network Firewall)"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          On insère un AWS Network Firewall dans le chemin de sortie du siège : tout l'egress
+          (serveurs + nomade en tunnel complet) traverse le pare-feu, qui inspecte le nom de domaine
+          (SNI/HTTP Host) et BLOQUE une liste (démo : *.facebook.com, *.tiktok.com), laisse passer le reste.
+      - type: image
+        path: "schema/etat-deploye-02-firewall.png"
+        caption: "Egress siège → endpoint pare-feu (inspection) → IGW. DENYLIST facebook/tiktok ; retour stateful par route edge."
+        width_in: 6.8
+      - type: bullets
+        items:
+          - "Routage : route publique du siège 0/0 → endpoint pare-feu ; subnet pare-feu 0/0 → IGW ; route edge (IGW) public/25 → pare-feu (retour stateful)."
+          - "Règle stateful DENYLIST sur SNI/HTTP Host ; journalisation flux + alertes vers CloudWatch (/ymmo/network-firewall)."
+          - "Refactor propre : la route publique par défaut est passée d'inline à aws_route → réorientable, et répétable from scratch."
+
+  - heading: "5. CT-06 — le filtrage prouvé (deux façons de tester)"
+    level: 1
+    body:
+      - type: paragraph
+        text: >-
+          Le test peut se faire AU CHOIX, les deux empruntant l'egress du siège (donc le pare-feu) :
+      - type: bullets
+        items:
+          - "A) Depuis le NOMADE : VPN connecté → ouvrir facebook.com (bloqué) vs un site pro (passe)."
+          - "B) Depuis un POSTE WINDOWS DU SIÈGE (ec2-admin-siege, via Fleet Manager RDP) → idem."
+      - type: table
+        headers: ["Domaine", "Attendu", "Obtenu (nomade ET siège)"]
+        rows:
+          - ["example.com", "autorisé", "✓ HTTP 200"]
+          - ["www.facebook.com", "bloqué", "✓ timeout (rejeté par le pare-feu)"]
+
+  - heading: "6. Périmètre et coût (à connaître)"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Seul l'egress du SIÈGE est inspecté. Les postes d'AGENCE (Marseille/Nîmes) sortent par leur propre NAT/IGW → NON filtrés."
+          - "En PRODUCTION, un pare-feu devrait être déployé PAR AGENCE (ou l'egress des agences routé vers le siège via le TGW — pattern « hub d'inspection »)."
+          - "NON mis en place ici pour des raisons de COÛT : ~10 €/jour PAR pare-feu (cf. docs/notes/estimation-couts.md)."
+
+  - heading: "7. Provisionnement & pièges"
+    level: 1
+    body:
+      - type: bullets
+        items:
+          - "Terraform : vpn.tf (passerelle + EIP + secret EAP), firewall.tf (rule group, policy, firewall, subnet, routage egress, logs)."
+          - "Ansible : configure-vpn.yml (strongSwan + PKI + masquerade + génération du .mobileconfig)."
+          - "Piège strongSwan : la clé privée serveur ne se charge qu'au RESTART (pas au reload) → sinon « no private key found »."
+          - "Piège macOS Tahoe : un .mobileconfig ne s'installe jamais en CLI → Réglages → Profils → Installer."
+          - "Piège route edge : une RT associée à l'IGW exige des destinations = CIDR de subnet EXACTS (les deux /25, pas le /24)."
+
+  - heading: "8. Vue d'ensemble — état déployé (synthèse)"
+    level: 1
+    body:
+      - type: image
+        path: "schema/etat-deploye-01-ipsec-nomadisme.png"
+        caption: "Brique 1 — accès nomade IPSec."
+        width_in: 6.6
+      - type: image
+        path: "schema/etat-deploye-02-firewall.png"
+        caption: "Brique 2 — filtrage egress (Network Firewall)."
+        width_in: 6.6
+
+  - heading: "9. Voir dans la console AWS (pour la démo)"
+    level: 1
+    body:
+      - type: table
+        headers: ["Quoi montrer", "Où (console, région Paris)"]
+        rows:
+          - ["La passerelle VPN + son IP", "EC2 → Instances (ec2-vpn-gateway-siege) + EC2 → Elastic IPs"]
+          - ["Le pare-feu", "VPC → Network Firewall → Firewalls (ymmo-egress-firewall)"]
+          - ["La règle de blocage", "VPC → Network Firewall → Firewall policies / Rule groups (ymmo-block-domains : facebook/tiktok)"]
+          - ["Les logs du pare-feu", "CloudWatch → Log groups → /ymmo/network-firewall"]
+          - ["Le routage d'inspection", "VPC → Route tables (rt-public-siege → endpoint pare-feu ; rt-siege-firewall → IGW)"]
+
+slides:
+  - layout: title
+    title: "Step 05 — IPSec & nomadisme + pare-feu"
+    subtitle: "Ymmo · ouvrir un accès nomade (1/2) + filtrer l'egress (2/2)"
+
+  - layout: content
+    title: "Deux briques (qui auraient pu être 2 steps)"
+    bullets:
+      - "1/2 — Accès NOMADE IPSec : ouvrir un accès distant chiffré"
+      - "2/2 — Pare-feu d'egress : filtrer les flux sortants (blocage Facebook)"
+      - "Indépendantes : l'une ouvre une porte, l'autre contrôle la sortie"
+
+  - layout: image
+    title: "1/2 — Accès nomade IPSec"
+    image: "schema/etat-deploye-01-ipsec-nomadisme.png"
+    width_in: 9.0
+
+  - layout: table
+    title: "CT-05 — accès nomade prouvé"
+    headers: ["Action (Mac hors réseau)", "Résultat"]
+    rows:
+      - ["smb://filesrv.ymmo.lan/Commercial", "✓ OK (son pôle)"]
+      - ["smb://filesrv.ymmo.lan/AdminRH", "✓ refusé (NTFS)"]
+
+  - layout: image
+    title: "2/2 — Filtrage egress (Network Firewall)"
+    image: "schema/etat-deploye-02-firewall.png"
+    width_in: 9.0
+
+  - layout: table
+    title: "CT-06 — filtrage prouvé (nomade OU poste siège)"
+    headers: ["Domaine", "Résultat"]
+    rows:
+      - ["example.com", "✓ HTTP 200 (autorisé)"]
+      - ["www.facebook.com", "✗ timeout (bloqué)"]
+
+  - layout: content
+    title: "Périmètre & coût"
+    bullets:
+      - "Seul l'egress du SIÈGE est inspecté (les agences sortent par leur propre NAT)"
+      - "En prod : un pare-feu PAR AGENCE (ou egress agences via TGW = hub d'inspection)"
+      - "Non fait ici pour le COÛT : ~10 €/jour PAR pare-feu"
+      - "Test possible : depuis le nomade OU un poste Windows du siège (ec2-admin-siege)"

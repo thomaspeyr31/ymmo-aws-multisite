@@ -1,0 +1,14 @@
+# Actions représentatives du step RÉSEAU, vérifiées par DRY-RUN EC2 RÉEL (vérité terrain).
+# Format : <label> :: <sous-commande aws ec2 + args>   (le script ajoute --dry-run --region)
+# Règle de décision : seul "UnauthorizedOperation" = REFUS ; "DryRunOperation" ou toute
+# erreur de validation de paramètre = AUTORISÉ (l'autorisation a déjà été franchie).
+# IDs factices volontaires : l'auth est évaluée avant l'existence des ressources.
+ec2:CreateVpc             :: create-vpc --cidr-block 10.0.0.0/16
+ec2:CreateSubnet          :: create-subnet --vpc-id vpc-0aaaaaaaaaaaaaaaa --cidr-block 10.0.0.0/24
+ec2:CreateInternetGateway :: create-internet-gateway
+ec2:AllocateAddress       :: allocate-address --domain vpc
+ec2:CreateNatGateway      :: create-nat-gateway --subnet-id subnet-0aaaaaaaaaaaaaaaa --allocation-id eipalloc-0aaaaaaaaaaaaaaaa
+ec2:CreateRouteTable      :: create-route-table --vpc-id vpc-0aaaaaaaaaaaaaaaa
+ec2:CreateRoute           :: create-route --route-table-id rtb-0aaaaaaaaaaaaaaaa --destination-cidr-block 0.0.0.0/0 --gateway-id igw-0aaaaaaaaaaaaaaaa
+ec2:AssociateRouteTable   :: associate-route-table --route-table-id rtb-0aaaaaaaaaaaaaaaa --subnet-id subnet-0aaaaaaaaaaaaaaaa
+ec2:CreateDhcpOptions     :: create-dhcp-options --dhcp-configuration Key=domain-name-servers,Values=AmazonProvidedDNS

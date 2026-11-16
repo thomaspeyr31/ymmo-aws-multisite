@@ -1,0 +1,89 @@
+---
+# Configure l'annuaire ymmo.lan — modèle à 2 dimensions :
+#   FONCTION (groupe GRP_<Pole>)  +  SITE (OU=<Site> + groupe GRP_Site_<Site>).
+# Données : ../vars/ad.yml (source de vérité). Idempotent.
+#
+# PERF : tout est créé en UN SEUL appel win_powershell (un aller-retour SSM), au lieu
+# d'un module par objet (10+ sessions = ~5 min). PowerShell exécuté PAR Ansible.
+#
+# Lancement :
+#   ansible-playbook -i inventory/aws_ec2.yml playbooks/ad-objects.yml \
+#     -e ad_admin_password="$(terraform -chdir=../terraform/environments/demo output -raw ad_admin_password)"
+- name: Annuaire Ymmo — OU, groupes, utilisateurs (batch, 1 session SSM)
+  hosts: dc
+  gather_facts: false
+  vars_files:
+    - ../vars/ad.yml
+  vars:
+    domain_dn: "DC={{ domain.split('.') | join(',DC=') }}"
+    ad_data:
+      domain: "{{ domain }}"
+      domain_dn: "{{ domain_dn }}"
+      base_ou: "{{ base_ou }}"
+      groups_ou: "{{ groups_ou }}"
+      default_password: "{{ default_password }}"
+      groupes_fonction: "{{ groupes_fonction }}"
+      sites: "{{ sites }}"
+      users: "{{ users }}"
+
+  tasks:
+    - name: Créer OU + groupes + utilisateurs (idempotent)
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          $pw   = ConvertTo-SecureString '{{ ad_admin_password }}' -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential('{{ ad_admin_user }}', $pw)
+          $d    = '{{ ad_data | to_json }}' | ConvertFrom-Json
+          $log  = @()
+
+          function Ensure-OU($name, $path) {
+            if (-not (Get-ADOrganizationalUnit -Filter "Name -eq '$name'" -SearchBase $path -SearchScope OneLevel -Credential $cred -EA SilentlyContinue)) {
+              New-ADOrganizationalUnit -Name $name -Path $path -ProtectedFromAccidentalDeletion $false -Credential $cred
+              $script:log += "OU+ $name"
+            }
+          }
+          function Ensure-Group($name, $path) {
+            if (-not (Get-ADGroup -Filter "Name -eq '$name'" -Credential $cred -EA SilentlyContinue)) {
+              New-ADGroup -Name $name -GroupScope Global -GroupCategory Security -Path $path -Credential $cred
+              $script:log += "GRP+ $name"
+            }
+          }
+
+          # --- OU : racine + 1er niveau + par site ---
+          Ensure-OU 'Ymmo'    $d.domain_dn
+          Ensure-OU 'Groupes' $d.base_ou
+          Ensure-OU 'Sites'   $d.base_ou
+          foreach ($s in $d.sites) { Ensure-OU $s.nom ("OU=Sites," + $d.base_ou) }
+
+          # --- Groupes fonction + site ---
+          foreach ($g in $d.groupes_fonction) { Ensure-Group $g $d.groups_ou }
+          foreach ($s in $d.sites)            { Ensure-Group $s.groupe $d.groups_ou }
+
+          # --- Utilisateurs (rangés dans l'OU du site, membres de 2 groupes) ---
+          $secpw = ConvertTo-SecureString $d.default_password -AsPlainText -Force
+          foreach ($u in $d.users) {
+            $site = $d.sites | Where-Object { $_.cle -eq $u.site }
+            $name = "$($u.prenom) $($u.nom)"
+            if (-not (Get-ADUser -Filter "SamAccountName -eq '$($u.login)'" -Credential $cred -EA SilentlyContinue)) {
+              # nettoyer un éventuel résidu créé à moitié (même CN, sans sAMAccountName)
+              Get-ADUser -Filter "Name -eq '$name'" -SearchBase $site.ou -Credential $cred -EA SilentlyContinue |
+                Remove-ADUser -Confirm:$false -Credential $cred -EA SilentlyContinue
+              New-ADUser -Name $name -SamAccountName $u.login -UserPrincipalName "$($u.login)@$($d.domain)" `
+                -GivenName $u.prenom -Surname $u.nom -DisplayName $name -Description $u.titre `
+                -Path $site.ou -AccountPassword $secpw -Enabled $true -PasswordNeverExpires $true -Credential $cred
+              $log += "USER+ $($u.login)"
+            }
+            Add-ADGroupMember -Identity $u.groupe_fonction -Members $u.login -Credential $cred -EA SilentlyContinue
+            Add-ADGroupMember -Identity $site.groupe      -Members $u.login -Credential $cred -EA SilentlyContinue
+          }
+
+          $ouN   = (Get-ADOrganizationalUnit -Filter * -SearchBase $d.base_ou -Credential $cred).Count
+          $grpN  = (Get-ADGroup -Filter 'Name -like "GRP_*"' -Credential $cred).Count
+          $userN = (Get-ADUser -Filter * -SearchBase ("OU=Sites," + $d.base_ou) -Credential $cred).Count
+          "RESUME OU=$ouN Groupes=$grpN Users=$userN"
+          if ($log) { "Changements: " + ($log -join ', ') } else { "Aucun changement (déjà à jour)" }
+      register: ad_result
+
+    - name: Bilan
+      ansible.builtin.debug:
+        var: ad_result.output

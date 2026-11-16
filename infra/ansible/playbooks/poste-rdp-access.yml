@@ -1,0 +1,44 @@
+---
+# Autorise l'ouverture de session RDP (Fleet Manager) sur les postes d'agence.
+# Fleet Manager "Connexion Bureau à distance" = session RDP -> exige l'appartenance au
+# groupe local "Utilisateurs du Bureau à distance" (Remote Desktop Users, SID S-1-5-32-555).
+# On y ajoute "Utilisateurs du domaine" (Domain Users) : TOUT utilisateur du domaine peut
+# ouvrir une session sur N'IMPORTE QUEL poste (non-nominativité). La restriction par SITE
+# (GPO "Ouvrir une session") sera la démo du step 04.
+#
+# Résolution par SID (robuste à la localisation FR de l'AMI) :
+#   - Remote Desktop Users (local, intégré) : S-1-5-32-555
+#   - Domain Users : <SID du domaine>-513, déduit du SID du compte ordinateur.
+#
+# Lancement : ansible-playbook -i inventory/aws_ec2.yml playbooks/poste-rdp-access.yml
+- name: Autoriser les sessions RDP des utilisateurs du domaine sur les postes
+  hosts: postes
+  gather_facts: false
+  tasks:
+    - name: Ajouter "Utilisateurs du domaine" aux "Utilisateurs du Bureau a distance"
+      ansible.windows.win_powershell:
+        script: |
+          $ErrorActionPreference = 'Stop'
+          $cs   = Get-CimInstance Win32_ComputerSystem
+          $nb   = $cs.Domain.Split('.')[0]
+          # SID du compte ordinateur -> on en extrait le SID du domaine -> Domain Users = <dom>-513
+          $comp = New-Object System.Security.Principal.NTAccount("$nb\$($cs.Name)`$")
+          $dom  = $comp.Translate([System.Security.Principal.SecurityIdentifier]).AccountDomainSid
+          $du   = New-Object System.Security.Principal.SecurityIdentifier("$($dom.Value)-513")
+          $acct = $du.Translate([System.Security.Principal.NTAccount]).Value  # "YMMO\Utilisateurs du domaine"
+          $rdp  = Get-LocalGroup -SID 'S-1-5-32-555'    # "Utilisateurs du Bureau a distance"
+          $already = Get-LocalGroupMember -Group $rdp.Name |
+                     Where-Object { $_.SID.Value -eq $du.Value }
+          if (-not $already) {
+            Add-LocalGroupMember -SID 'S-1-5-32-555' -Member $acct
+            $Ansible.Changed = $true
+            "AJOUT : $acct -> $($rdp.Name)"
+          } else {
+            $Ansible.Changed = $false
+            "DEJA MEMBRE : $acct dans $($rdp.Name)"
+          }
+      register: rdp_result
+
+    - name: Bilan
+      ansible.builtin.debug:
+        var: rdp_result.output

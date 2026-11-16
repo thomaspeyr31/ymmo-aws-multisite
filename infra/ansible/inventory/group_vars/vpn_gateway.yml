@@ -1,0 +1,7 @@
+---
+# Passerelle IPSec = EC2 LINUX (Ubuntu) → on surcharge les défauts Windows de all.yml.
+# Connexion toujours via SSM (aucun port SSH ouvert), mais shell POSIX + élévation sudo.
+ansible_shell_type: sh
+ansible_become: true
+ansible_become_method: sudo
+ansible_python_interpreter: /usr/bin/python3

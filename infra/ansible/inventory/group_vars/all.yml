@@ -1,0 +1,19 @@
+---
+# Connexion à toutes les EC2 Windows via SSM (community.aws.aws_ssm) :
+# aucun port ouvert, pas d'IP publique. Le bucket sert au transit de fichiers du plugin.
+ansible_connection: community.aws.aws_ssm
+ansible_aws_ssm_region: eu-west-3
+ansible_aws_ssm_bucket_name: "{{ lookup('env', 'TF_STATE_BUCKET') }}"
+# Chemin du plugin résolu dynamiquement (portable Apple Silicon /opt/homebrew vs Intel /usr/local
+# vs installeur officiel /usr/local/sessionmanagerplugin/bin) — pas de chemin en dur.
+ansible_aws_ssm_plugin: "{{ lookup('pipe', 'command -v session-manager-plugin') }}"
+# Timeout généreux : les opérations Windows longues (promotion DC, ~minutes) dépassent
+# le défaut SSM (60s), ce qui tuait la session → "worker in a dead state".
+ansible_aws_ssm_timeout: 3600
+ansible_shell_type: powershell
+
+# Compte admin du domaine = l'Administrateur intégré (RID-500) de l'AMI FRANÇAISE.
+# Format down-level NetBIOS\sAMAccountName (l'UPN n'est pas fiable sur le compte intégré).
+# Le mot de passe est injecté au lancement, jamais stocké ici :
+#   -e ad_admin_password="$(terraform -chdir=../terraform/environments/demo output -raw ad_admin_password)"
+ad_admin_user: "YMMO\\Administrateur"

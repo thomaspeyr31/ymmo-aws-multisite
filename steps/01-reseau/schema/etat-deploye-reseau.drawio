@@ -1,0 +1,102 @@
+<mxfile host="app.diagrams.net" type="device">
+  <diagram id="ymmo-deployed-net" name="État déployé — Réseau (Phase 1)">
+    <mxGraphModel dx="1400" dy="900" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="1700" pageHeight="900" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+
+        <mxCell id="title" value="Ymmo — État RÉELLEMENT déployé · Phase 1 (Réseau) · 60 ressources · eu-west-3 (Paris)" style="text;html=1;align=center;fontSize=19;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="20" y="8" width="1660" height="30" as="geometry" />
+        </mxCell>
+
+        <mxCell id="internet" value="Internet" style="shape=cloud;fillColor=#3D4893;fontColor=#FFFFFF;strokeColor=#2D3570;fontSize=15;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="780" y="44" width="150" height="50" as="geometry" />
+        </mxCell>
+
+        <mxCell id="region" value="AWS Cloud — Région eu-west-3 (Paris) · AZ : eu-west-3a + eu-west-3b" style="rounded=1;arcSize=3;fillColor=#F7F8FA;strokeColor=#29B6D6;dashed=1;dashPattern=8 4;verticalAlign=top;align=left;spacingLeft=14;spacingTop=8;fontSize=16;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="20" y="120" width="1660" height="700" as="geometry" />
+        </mxCell>
+
+        <!-- ============ VPC SIÈGE ============ -->
+        <mxCell id="vpc_s" value="VPC Siège — Aix · 10.10.0.0/16&#10;vpc-04ccef2a5305e7188" style="rounded=1;arcSize=5;fillColor=#FBFEFF;strokeColor=#29B6D6;strokeWidth=2;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="50" y="170" width="500" height="630" as="geometry" />
+        </mxCell>
+        <mxCell id="s_pub" value="Public · 10.10.0.0/24&#10;AZ-a 10.10.0.0/25   ·   AZ-b 10.10.0.128/25" style="rounded=0;fillColor=#FFF8EE;strokeColor=#D89A3C;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="250" width="460" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="s_igw" value="IGW" style="rounded=1;arcSize=12;fillColor=#F0AD4E;fontColor=#212529;strokeColor=#D89A3C;fontSize=13;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="85" y="305" width="90" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="s_nat" value="NAT GW&#10;13.37.194.252" style="rounded=1;arcSize=12;fillColor=#F0AD4E;fontColor=#212529;strokeColor=#D89A3C;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="190" y="305" width="160" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="s_srv" value="Serveurs · 10.10.10.0/24  (multi-AZ — prêt pour Managed AD)&#10;AZ-a 10.10.10.0/25   ·   AZ-b 10.10.10.128/25" style="rounded=0;fillColor=#EEF0F8;strokeColor=#2D3570;verticalAlign=middle;align=left;spacingLeft=10;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="386" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="s_post" value="Postes · 10.10.20.0/24&#10;AZ-a 10.10.20.0/25   ·   AZ-b 10.10.20.128/25" style="rounded=0;fillColor=#F0FAFD;strokeColor=#5CC0D6;verticalAlign=middle;align=left;spacingLeft=10;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="482" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="s_foot" value="RT public → IGW   ·   RT privées (serveurs/postes) → NAT GW   ·   DHCP options : AmazonProvidedDNS" style="rounded=0;fillColor=#F0F2F5;strokeColor=#C8D0D8;align=left;spacingLeft=10;fontSize=12;fontColor=#6C757D;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="70" y="578" width="460" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ============ VPC MARSEILLE ============ -->
+        <mxCell id="vpc_m" value="VPC Agence — Marseille · 10.21.0.0/16&#10;vpc-029b8be2597682a12" style="rounded=1;arcSize=5;fillColor=#FBFCFE;strokeColor=#B0B8C0;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="590" y="170" width="500" height="630" as="geometry" />
+        </mxCell>
+        <mxCell id="m_pub" value="Public · 10.21.0.0/24&#10;AZ-a 10.21.0.0/25   ·   AZ-b 10.21.0.128/25" style="rounded=0;fillColor=#FFF8EE;strokeColor=#D89A3C;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="250" width="460" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="m_igw" value="IGW" style="rounded=1;arcSize=12;fillColor=#F0AD4E;fontColor=#212529;strokeColor=#D89A3C;fontSize=13;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="625" y="305" width="90" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="m_nat" value="NAT GW&#10;52.47.213.19" style="rounded=1;arcSize=12;fillColor=#F0AD4E;fontColor=#212529;strokeColor=#D89A3C;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="730" y="305" width="160" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="m_srv" value="Serveurs · 10.21.10.0/24  (multi-AZ)&#10;AZ-a 10.21.10.0/25   ·   AZ-b 10.21.10.128/25" style="rounded=0;fillColor=#EEF0F8;strokeColor=#2D3570;verticalAlign=middle;align=left;spacingLeft=10;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="386" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="m_post" value="Postes · 10.21.20.0/24&#10;AZ-a 10.21.20.0/25   ·   AZ-b 10.21.20.128/25" style="rounded=0;fillColor=#F0FAFD;strokeColor=#5CC0D6;verticalAlign=middle;align=left;spacingLeft=10;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="482" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="m_foot" value="RT public → IGW   ·   RT privées → NAT GW   ·   DHCP : AmazonProvidedDNS" style="rounded=0;fillColor=#F0F2F5;strokeColor=#C8D0D8;align=left;spacingLeft=10;fontSize=12;fontColor=#6C757D;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="610" y="578" width="460" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ============ VPC NÎMES ============ -->
+        <mxCell id="vpc_n" value="VPC Agence — Nîmes · 10.22.0.0/16&#10;vpc-0605046f3bd3fb0f1" style="rounded=1;arcSize=5;fillColor=#FBFCFE;strokeColor=#B0B8C0;verticalAlign=top;align=center;spacingTop=8;fontSize=14;fontStyle=1;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1130" y="170" width="500" height="630" as="geometry" />
+        </mxCell>
+        <mxCell id="n_pub" value="Public · 10.22.0.0/24&#10;AZ-a 10.22.0.0/25   ·   AZ-b 10.22.0.128/25" style="rounded=0;fillColor=#FFF8EE;strokeColor=#D89A3C;verticalAlign=top;align=left;spacingLeft=10;spacingTop=6;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="250" width="460" height="120" as="geometry" />
+        </mxCell>
+        <mxCell id="n_igw" value="IGW" style="rounded=1;arcSize=12;fillColor=#F0AD4E;fontColor=#212529;strokeColor=#D89A3C;fontSize=13;fontStyle=1;fontFamily=Helvetica;" vertex="1" parent="1">
+          <mxGeometry x="1165" y="305" width="90" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="n_nat" value="NAT GW&#10;13.37.56.152" style="rounded=1;arcSize=12;fillColor=#F0AD4E;fontColor=#212529;strokeColor=#D89A3C;fontSize=13;fontStyle=1;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1270" y="305" width="160" height="46" as="geometry" />
+        </mxCell>
+        <mxCell id="n_srv" value="Serveurs · 10.22.10.0/24  (multi-AZ)&#10;AZ-a 10.22.10.0/25   ·   AZ-b 10.22.10.128/25" style="rounded=0;fillColor=#EEF0F8;strokeColor=#2D3570;verticalAlign=middle;align=left;spacingLeft=10;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="386" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="n_post" value="Postes · 10.22.20.0/24&#10;AZ-a 10.22.20.0/25   ·   AZ-b 10.22.20.128/25" style="rounded=0;fillColor=#F0FAFD;strokeColor=#5CC0D6;verticalAlign=middle;align=left;spacingLeft=10;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="482" width="460" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="n_foot" value="RT public → IGW   ·   RT privées → NAT GW   ·   DHCP : AmazonProvidedDNS" style="rounded=0;fillColor=#F0F2F5;strokeColor=#C8D0D8;align=left;spacingLeft=10;fontSize=12;fontColor=#6C757D;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="1150" y="578" width="460" height="50" as="geometry" />
+        </mxCell>
+
+        <!-- ===== Egress Internet ===== -->
+        <mxCell id="e_s" style="endArrow=block;endFill=1;strokeColor=#D89A3C;strokeWidth=1.5;" edge="1" parent="1" source="s_nat" target="internet"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_m" style="endArrow=block;endFill=1;strokeColor=#D89A3C;strokeWidth=1.5;" edge="1" parent="1" source="m_nat" target="internet"><mxGeometry relative="1" as="geometry" /></mxCell>
+        <mxCell id="e_n" style="endArrow=block;endFill=1;strokeColor=#D89A3C;strokeWidth=1.5;" edge="1" parent="1" source="n_nat" target="internet"><mxGeometry relative="1" as="geometry" /></mxCell>
+
+        <!-- ===== Note de périmètre ===== -->
+        <mxCell id="scope" value="Déployé (Phase 1) : 3 VPC · 18 subnets · 3 IGW · 3 NAT GW · 6 route tables · 18 associations · 3 DHCP options.&#10;PAS ENCORE déployé : Transit Gateway (hub-and-spoke) · Managed Microsoft AD · EC2 · Network Firewall." style="rounded=1;arcSize=6;fillColor=#FFF0E8;strokeColor=#D89A3C;align=left;spacingLeft=12;spacingTop=6;fontSize=13;fontColor=#212529;fontFamily=Helvetica;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="20" y="836" width="1660" height="54" as="geometry" />
+        </mxCell>
+
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>

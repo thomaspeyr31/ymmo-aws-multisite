@@ -1,0 +1,15 @@
+# Actions IAM pour le step 03 (Transit Gateway). Vérif : preflight-iam-sim.sh preflight/transit.actions
+ec2:CreateTransitGateway
+ec2:DeleteTransitGateway
+ec2:CreateTransitGatewayVpcAttachment
+ec2:DeleteTransitGatewayVpcAttachment
+ec2:CreateTransitGatewayRouteTable
+ec2:DeleteTransitGatewayRouteTable
+ec2:AssociateTransitGatewayRouteTable
+ec2:DisassociateTransitGatewayRouteTable
+ec2:EnableTransitGatewayRouteTablePropagation
+ec2:DisableTransitGatewayRouteTablePropagation
+ec2:CreateTransitGatewayRoute
+ec2:DeleteTransitGatewayRoute
+ec2:CreateRoute
+ec2:CreateDhcpOptions

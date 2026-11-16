@@ -1,0 +1,34 @@
+---
+# Joint le SERVEUR DE FICHIERS du siège au domaine ymmo.lan et le renomme FILESRV
+# (un seul reboot). Même pattern validé que les postes : DNS->DC, Add-Computer en
+# async fire-and-forget (évite le "worker dead state" SSM/macOS), reboot OS interne.
+#
+# Lancement :
+#   ansible-playbook -i inventory/aws_ec2.yml playbooks/join-fileserver.yml \
+#     -e ad_admin_password="$(terraform -chdir=../terraform/environments/demo output -raw ad_admin_password)"
+- name: Jonction du serveur de fichiers au domaine ymmo.lan (rename FILESRV)
+  hosts: fileserver
+  gather_facts: false
+  vars:
+    dc_ip: "10.10.10.10"
+    new_name: "FILESRV"
+  tasks:
+    - name: Pointer le DNS de la carte vers le DC ({{ dc_ip }})
+      ansible.windows.win_dns_client:
+        adapter_names: "*"
+        dns_servers:
+          - "{{ dc_ip }}"
+
+    # Jonction + renommage + reboot en UN SEUL win_shell async fire-and-forget.
+    - name: Joindre ymmo.lan, renommer en {{ new_name }} et redémarrer (async)
+      ansible.windows.win_shell: |
+        $pw   = ConvertTo-SecureString '{{ ad_admin_password }}' -AsPlainText -Force
+        $cred = New-Object System.Management.Automation.PSCredential('{{ ad_admin_user }}', $pw)
+        Add-Computer -DomainName ymmo.lan -NewName '{{ new_name }}' -Credential $cred -Force -Restart
+      async: 60
+      poll: 0
+      no_log: true
+
+    - name: Bilan
+      ansible.builtin.debug:
+        msg: "Fileserver : jonction ymmo.lan + rename {{ new_name }} + reboot lancés (async)."

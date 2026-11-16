@@ -1,0 +1,29 @@
+# Clés SSH
+keys/ymmo-key
+*.pem
+
+# Terraform
+.terraform/
+.terraform.lock.hcl
+terraform.tfstate
+terraform.tfstate.backup
+tfplan
+*.tfplan
+crash.log
+
+# Variables sensibles
+terraform.tfvars
+.env
+.secret.env
+
+# Python (outillage)
+.venv/
+__pycache__/
+*.pyc
+
+# Divers
+.DS_Store
+
+# Profils VPN générés et fichiers verrou Office
+*.mobileconfig
+~$*
